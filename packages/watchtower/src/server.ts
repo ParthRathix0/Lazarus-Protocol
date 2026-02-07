@@ -88,7 +88,44 @@ app.post('/heartbeat', async (req, res) => {
       });
     }
 
-    // Record the heartbeat
+    // CRITICAL: Update the on-chain heartbeat via pingFor
+    // This ensures the contract's lastHeartbeat is updated, not just our database
+    try {
+      const hash = await walletClient.writeContract({
+        address: config.lazarusSourceAddress,
+        abi: [
+          {
+            inputs: [{ name: '_user', type: 'address' }],
+            name: 'pingFor',
+            outputs: [],
+            stateMutability: 'nonpayable',
+            type: 'function',
+          },
+        ],
+        functionName: 'pingFor',
+        args: [address as Address],
+        chain: walletClient.chain,
+        account: walletClient.account!,
+      });
+
+      console.log(`[${new Date().toISOString()}] On-chain ping for ${address}: ${hash}`);
+      
+      // Wait for confirmation (non-blocking for UX, but log result)
+      publicClient.waitForTransactionReceipt({ hash }).then(receipt => {
+        if (receipt.status === 'success') {
+          console.log(`[${new Date().toISOString()}] On-chain ping confirmed for ${address}`);
+        } else {
+          console.error(`[${new Date().toISOString()}] On-chain ping failed for ${address}`);
+        }
+      }).catch(err => {
+        console.error(`[${new Date().toISOString()}] Error confirming ping for ${address}:`, err);
+      });
+    } catch (pingError) {
+      // Log but don't fail - user may not be registered yet
+      console.warn(`[${new Date().toISOString()}] Failed to call pingFor for ${address}:`, pingError);
+    }
+
+    // Record the heartbeat in local database
     const record = store.recordHeartbeat(address, signature);
 
     console.log(`[${new Date().toISOString()}] Heartbeat recorded for ${address}`);

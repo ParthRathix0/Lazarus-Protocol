@@ -25,6 +25,9 @@ contract LazarusVault is Ownable, ReentrancyGuard {
     /// @notice Authorized depositors (bridge contracts/relayers)
     mapping(address => bool) public authorizedDepositors;
 
+    /// @notice Total tracked balance across all beneficiaries
+    uint256 public totalTrackedBalance;
+
     /*//////////////////////////////////////////////////////////////
                                   EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -79,8 +82,9 @@ contract LazarusVault is Ownable, ReentrancyGuard {
         // Pull USDC from depositor
         IERC20(usdc).safeTransferFrom(msg.sender, address(this), _amount);
         
-        // Credit beneficiary's balance
+        // Credit beneficiary's balance and update total
         balances[_beneficiary] += _amount;
+        totalTrackedBalance += _amount;
         
         emit Deposited(msg.sender, _beneficiary, _amount);
     }
@@ -92,14 +96,15 @@ contract LazarusVault is Ownable, ReentrancyGuard {
         if (!authorizedDepositors[msg.sender]) revert NotAuthorizedDepositor();
         if (_beneficiary == address(0)) revert ZeroAddress();
         
-        // Get balance that was sent to this contract
+        // Get balance that was sent to this contract but not yet tracked
         uint256 balance = IERC20(usdc).balanceOf(address(this));
-        uint256 totalTracked = _getTotalTrackedBalance();
-        uint256 newDeposit = balance > totalTracked ? balance - totalTracked : 0;
+        uint256 newDeposit = balance > totalTrackedBalance ? balance - totalTrackedBalance : 0;
         
         if (newDeposit == 0) revert ZeroAmount();
         
+        // Credit beneficiary's balance and update total
         balances[_beneficiary] += newDeposit;
+        totalTrackedBalance += newDeposit;
         
         emit Deposited(msg.sender, _beneficiary, newDeposit);
     }
@@ -115,6 +120,7 @@ contract LazarusVault is Ownable, ReentrancyGuard {
         if (amount == 0) revert InsufficientBalance();
         
         balances[msg.sender] = 0;
+        totalTrackedBalance -= amount;
         
         IERC20(usdc).safeTransfer(msg.sender, amount);
         
@@ -128,6 +134,7 @@ contract LazarusVault is Ownable, ReentrancyGuard {
         if (balances[msg.sender] < _amount) revert InsufficientBalance();
         
         balances[msg.sender] -= _amount;
+        totalTrackedBalance -= _amount;
         
         IERC20(usdc).safeTransfer(msg.sender, _amount);
         
@@ -147,10 +154,8 @@ contract LazarusVault is Ownable, ReentrancyGuard {
 
     /// @notice Get total tracked balance across all beneficiaries
     /// @dev Used internally for deposit calculations
-    function _getTotalTrackedBalance() internal view returns (uint256 total) {
-        // Note: This is a simplified implementation
-        // In production, you'd track this more efficiently
-        return IERC20(usdc).balanceOf(address(this));
+    function _getTotalTrackedBalance() internal view returns (uint256) {
+        return totalTrackedBalance;
     }
 
     /*//////////////////////////////////////////////////////////////

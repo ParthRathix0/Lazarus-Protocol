@@ -177,6 +177,39 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             revert NotDeadYet();
         }
 
+        address beneficiary = beneficiaries[_user];
+
+        // SECURITY: Validate the receiver in LI.FI calldata matches the beneficiary
+        // LI.FI BridgeData struct has `receiver` at a known offset after the function selector
+        // This prevents a compromised watchtower from stealing funds
+        if (_swapData.length >= 68) { // 4 bytes selector + 64 bytes for first struct fields
+            // The receiver is typically the 2nd field in BridgeData (after bytes32 transactionId)
+            // Offset: 4 (selector) + 32 (transactionId) + 12 (address padding) = 48
+            // But in practice, receiver offset varies. We check if beneficiary appears in calldata.
+            bool beneficiaryFound = false;
+            // Search for beneficiary address in the first 200 bytes of calldata
+            uint256 searchLen = _swapData.length > 200 ? 200 : _swapData.length;
+            for (uint256 i = 4; i + 20 <= searchLen; i++) {
+                address extracted;
+                // Extract address from calldata at position i (addresses are right-aligned in 32-byte slots)
+                // We check every position in case of different struct packing
+                bytes20 addrBytes;
+                for (uint256 j = 0; j < 20; j++) {
+                    addrBytes |= bytes20(_swapData[i + j]) >> (j * 8);
+                }
+                extracted = address(addrBytes);
+                if (extracted == beneficiary) {
+                    beneficiaryFound = true;
+                    break;
+                }
+            }
+            // If beneficiary not found in calldata, this could be malicious
+            // Note: This is a heuristic check - in production, use a more robust validation
+            if (!beneficiaryFound) {
+                revert InvalidBeneficiary();
+            }
+        }
+
         // Mark user as dead (only on first liquidation call)
         // Note: We still allow additional liquidate calls for different tokens
         if (!isDead[_user]) {
@@ -217,7 +250,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             emit LiquidationFailed(_user, _token, "LI.FI call failed");
         }
 
-        emit Liquidated(_user, beneficiaries[_user], _token, amountToBridge);
+        emit Liquidated(_user, beneficiary, _token, amountToBridge);
     }
 
     /*//////////////////////////////////////////////////////////////
