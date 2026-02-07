@@ -1,0 +1,50 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+!/broadcast
+/broadcast/*/31337/
+/broadcast/**/dry-run/
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Libraries (installed via forge install)
+/lib/
+
+# Node modules (if using npm)
+node_modules/
+
+# Coverage
+lcov.info
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Artifacts
+/artifacts/
+
+# TypeChain
+/typechain/
+/typechain-types/
+
+# Logs
+*.log
+
+# Snapshots
+.gas-snapshot
