@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress } from 'wagmi';
 import { isAddress } from 'viem';
+import { mainnet } from 'viem/chains';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
@@ -19,37 +20,78 @@ function safeNormalize(name: string): string | undefined {
   }
 }
 
+// Validate ETH address - must be exactly 42 chars (0x + 40 hex)
+function getAddressValidationError(addr: string): string | undefined {
+  if (!addr) return undefined;
+  if (!addr.startsWith('0x')) return 'Address must start with 0x';
+  if (addr.length < 42) return 'Address too short (must be 42 characters)';
+  if (addr.length > 42) return 'Address too long (must be 42 characters)';
+  
+  const hexPart = addr.slice(2);
+  if (!/^[a-fA-F0-9]{40}$/.test(hexPart)) {
+    return 'Invalid characters (must be 0-9 and a-f)';
+  }
+  
+  return undefined;
+}
+
 export function RegistrationForm() {
   const { address, isConnected } = useAccount();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
 
-  // ENS resolution - only when we have a valid-looking ENS name
+  // Check input type
+  const isAddressAttempt = beneficiaryInput.startsWith('0x');
+  const isENSAttempt = beneficiaryInput.includes('.') && !isAddressAttempt;
+  
+  // ENS resolution - use mainnet for ENS
   const normalizedName = safeNormalize(beneficiaryInput);
-  const { data: ensAddress, isLoading: isEnsLoading } = useEnsAddress({
+  const { data: ensAddress, isLoading: isEnsLoading, isError: isEnsError } = useEnsAddress({
     name: normalizedName,
+    chainId: mainnet.id,
+    query: { enabled: isENSAttempt && !!normalizedName },
   });
 
   // Contract write
-  const { writeContract, data: hash, isPending, error } = useWriteContract();
+  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
 
-  // Helper to check if string is valid eth address (with regex fallback for checksum issues)
-  const isValidAddress = (addr: string): boolean => {
-    if (isAddress(addr)) return true;
-    return /^0x[a-fA-F0-9]{40}$/.test(addr);
-  };
-
-  // Compute resolved address
+  // Resolve beneficiary address
+  const addressError = isAddressAttempt ? getAddressValidationError(beneficiaryInput) : undefined;
+  
   const resolvedAddress: `0x${string}` | null = (() => {
-    if (beneficiaryInput && isValidAddress(beneficiaryInput)) {
+    if (isAddressAttempt && !addressError) {
       return beneficiaryInput as `0x${string}`;
     }
-    if (ensAddress) {
+    if (isENSAttempt && ensAddress) {
       return ensAddress;
     }
+    return null;
+  })();
+
+  // Determine validation display state
+  const validationUI = (() => {
+    if (!beneficiaryInput) return null;
+
+    if (isAddressAttempt) {
+      if (addressError) {
+        return { type: 'error', message: `✗ ${addressError}` };
+      }
+      return { type: 'success', message: `✓ Valid address format` };
+    }
+
+    if (isENSAttempt) {
+      if (isEnsLoading) return { type: 'loading', message: 'Resolving ENS...' };
+      if (ensAddress) return { type: 'success', message: `✓ Resolved to ${ensAddress.slice(0, 6)}...${ensAddress.slice(-4)}` };
+      if (isEnsError || !ensAddress) return { type: 'error', message: '✗ ENS name not found or invalid' };
+    }
+
+    if (beneficiaryInput.length > 0) {
+      return { type: 'error', message: '✗ Enter a valid 0x address or ENS name (.eth)' };
+    }
+
     return null;
   })();
 
@@ -89,31 +131,32 @@ export function RegistrationForm() {
             type="text"
             value={beneficiaryInput}
             onChange={(e) => setBeneficiaryInput(e.target.value)}
-            placeholder="0x... or grandma.eth"
+            placeholder="0x... or vitalik.eth"
             className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
           />
           
-          {isEnsLoading && (
-            <p className="mt-2 text-sm text-violet-400 flex items-center gap-2">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Resolving ENS...
-            </p>
-          )}
-          
-          {resolvedAddress && beneficiaryInput && (
-            <p className="mt-2 text-sm text-green-400">
-              ✓ {beneficiaryInput.includes('.') ? 'Resolved to: ' : 'Valid address: '}
-              {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
-            </p>
+          {validationUI && (
+            <div className="mt-2 text-sm flex items-center gap-2">
+              {validationUI.type === 'loading' && (
+                <svg className="animate-spin h-4 w-4 text-violet-400" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              <span className={
+                validationUI.type === 'success' ? 'text-green-400' :
+                validationUI.type === 'error' ? 'text-red-400' :
+                'text-violet-400'
+              }>
+                {validationUI.message}
+              </span>
+            </div>
           )}
         </div>
 
-        {error && (
+        {writeError && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <p className="text-red-400 text-sm">{error.message}</p>
+            <p className="text-red-400 text-sm">{writeError.message}</p>
           </div>
         )}
 
@@ -134,3 +177,4 @@ export function RegistrationForm() {
     </div>
   );
 }
+

@@ -1,10 +1,10 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { sepolia } from 'wagmi/chains';
+import { sepolia, mainnet } from 'wagmi/chains';
 
 export const config = getDefaultConfig({
   appName: 'Lazarus Protocol',
   projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || 'demo-project-id',
-  chains: [sepolia],
+  chains: [sepolia, mainnet],
   ssr: true,
 });
 
