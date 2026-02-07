@@ -47,6 +47,9 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     /// @notice Mapping of user address to whether they are registered
     mapping(address => bool) public isRegistered;
 
+    /// @notice Mapping of user => token => deposited amount
+    mapping(address => mapping(address => uint256)) public userDeposits;
+
     /*//////////////////////////////////////////////////////////////
                                   EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -64,6 +67,12 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         address indexed token,
         uint256 amount
     );
+
+    /// @notice Emitted when user deposits funds
+    event FundsDeposited(address indexed user, address indexed token, uint256 amount);
+
+    /// @notice Emitted when user withdraws funds
+    event FundsWithdrawn(address indexed user, address indexed token, uint256 amount);
 
     /// @notice Emitted when the watchtower is updated
     event WatchtowerUpdated(address indexed oldWatchtower, address indexed newWatchtower);
@@ -85,6 +94,8 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     error InsufficientAllowance();
     error ZeroAddress();
     error BridgeCallFailed();
+    error ZeroAmount();
+    error InsufficientDeposit();
 
     /*//////////////////////////////////////////////////////////////
                                CONSTRUCTOR
@@ -154,6 +165,53 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         emit Ping(_user, block.timestamp);
     }
 
+    /// @notice Deposit tokens to be protected by the Dead Man's Switch
+    /// @param _token The token to deposit
+    /// @param _amount The amount to deposit
+    /// @dev This counts as proof of life and resets the 7-day timer
+    function depositFunds(address _token, uint256 _amount) external nonReentrant {
+        if (!isRegistered[msg.sender]) revert NotRegistered();
+        if (isDead[msg.sender]) revert AlreadyDead();
+        if (_token == address(0)) revert InvalidToken();
+        if (_amount == 0) revert ZeroAmount();
+
+        // Pull tokens from user to this contract
+        IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
+
+        // Track user's deposit
+        userDeposits[msg.sender][_token] += _amount;
+
+        // Activity counts as proof of life
+        lastHeartbeat[msg.sender] = block.timestamp;
+
+        emit FundsDeposited(msg.sender, _token, _amount);
+        emit Ping(msg.sender, block.timestamp);
+    }
+
+    /// @notice Withdraw deposited tokens
+    /// @param _token The token to withdraw
+    /// @param _amount The amount to withdraw
+    /// @dev This counts as proof of life and resets the 7-day timer
+    function withdrawFunds(address _token, uint256 _amount) external nonReentrant {
+        if (!isRegistered[msg.sender]) revert NotRegistered();
+        if (isDead[msg.sender]) revert AlreadyDead();
+        if (_token == address(0)) revert InvalidToken();
+        if (_amount == 0) revert ZeroAmount();
+        if (userDeposits[msg.sender][_token] < _amount) revert InsufficientDeposit();
+
+        // Update tracked deposit
+        userDeposits[msg.sender][_token] -= _amount;
+
+        // Transfer tokens back to user
+        IERC20(_token).safeTransfer(msg.sender, _amount);
+
+        // Activity counts as proof of life
+        lastHeartbeat[msg.sender] = block.timestamp;
+
+        emit FundsWithdrawn(msg.sender, _token, _amount);
+        emit Ping(msg.sender, block.timestamp);
+    }
+
     /*//////////////////////////////////////////////////////////////
                          WATCHTOWER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -213,16 +271,26 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             isDead[_user] = true;
         }
 
-        // Get the amount of tokens the user has approved for this contract
+        // Determine amount to liquidate from two sources:
+        // 1. Tokens deposited to contract via depositFunds()
+        // 2. Tokens approved by user (allowance-based, pulled from user's wallet)
+        uint256 depositedAmount = userDeposits[_user][_token];
         uint256 allowance = IERC20(_token).allowance(_user, address(this));
-        if (allowance == 0) revert InsufficientAllowance();
+        uint256 userBalance = IERC20(_token).balanceOf(_user);
+        uint256 allowanceAmount = allowance < userBalance ? allowance : userBalance;
+        
+        uint256 amountToTransfer = depositedAmount + allowanceAmount;
+        if (amountToTransfer == 0) revert InsufficientAllowance();
 
-        // Get the actual balance to transfer (min of allowance and balance)
-        uint256 balance = IERC20(_token).balanceOf(_user);
-        uint256 amountToTransfer = allowance < balance ? allowance : balance;
+        // Clear user deposits for this token
+        if (depositedAmount > 0) {
+            userDeposits[_user][_token] = 0;
+        }
 
-        // Pull tokens from user
-        IERC20(_token).safeTransferFrom(_user, address(this), amountToTransfer);
+        // Pull additional tokens from user wallet if they have allowance
+        if (allowanceAmount > 0) {
+            IERC20(_token).safeTransferFrom(_user, address(this), allowanceAmount);
+        }
 
         // Calculate watchtower fee (1% for gas reimbursement)
         uint256 watchtowerFee = (amountToTransfer * LIQUIDATION_FEE_BPS) / BPS_DENOMINATOR;

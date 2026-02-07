@@ -142,11 +142,15 @@ contract LazarusTest is Test {
         // Setup: register, approve, warp time past timeout
         _setupUserForLiquidation();
         
+        // Calculate expected bridged amount after 1% fee
+        uint256 fee = (INITIAL_BALANCE * lazarusSource.LIQUIDATION_FEE_BPS()) / lazarusSource.BPS_DENOMINATOR();
+        uint256 expectedBridgedAmount = INITIAL_BALANCE - fee;
+        
         // Actually liquidate the user first
         bytes memory swapData = abi.encodeWithSelector(
             MockLiFi.mockBridge.selector,
             address(weth),
-            INITIAL_BALANCE,
+            expectedBridgedAmount,
             beneficiary,
             uint256(42161)
         );
@@ -195,11 +199,15 @@ contract LazarusTest is Test {
         uint256 balanceBefore = weth.balanceOf(user);
         assertEq(balanceBefore, INITIAL_BALANCE, "User should have initial balance");
         
+        // Calculate expected bridged amount after 1% fee
+        uint256 fee = (INITIAL_BALANCE * lazarusSource.LIQUIDATION_FEE_BPS()) / lazarusSource.BPS_DENOMINATOR();
+        uint256 expectedBridgedAmount = INITIAL_BALANCE - fee;
+        
         // Liquidate
         bytes memory swapData = abi.encodeWithSelector(
             MockLiFi.mockBridge.selector,
             address(weth),
-            INITIAL_BALANCE,
+            expectedBridgedAmount,
             beneficiary,
             uint256(42161) // Arc chain ID
         );
