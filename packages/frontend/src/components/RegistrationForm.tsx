@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress } from 'wagmi';
 import { isAddress } from 'viem';
 import { mainnet } from 'viem/chains';
@@ -35,7 +35,11 @@ function getAddressValidationError(addr: string): string | undefined {
   return undefined;
 }
 
-export function RegistrationForm() {
+interface RegistrationFormProps {
+  onSuccess?: () => void;
+}
+
+export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   const { address, isConnected } = useAccount();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
 
@@ -57,6 +61,13 @@ export function RegistrationForm() {
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
+
+  // Trigger onSuccess callback when transaction is successful
+  useEffect(() => {
+    if (isSuccess && onSuccess) {
+      onSuccess();
+    }
+  }, [isSuccess, onSuccess]);
 
   // Resolve beneficiary address
   const addressError = isAddressAttempt ? getAddressValidationError(beneficiaryInput) : undefined;

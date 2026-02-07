@@ -13,7 +13,7 @@ export default function Home() {
   const { address, isConnected } = useAccount();
 
   // Check if user is registered
-  const { data: isRegistered } = useReadContract({
+  const { data: isRegistered, refetch: refetchStatus } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
     functionName: 'isRegistered',
