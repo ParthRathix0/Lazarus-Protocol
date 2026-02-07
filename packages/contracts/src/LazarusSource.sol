@@ -251,6 +251,14 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         // SECURITY: Validate the receiver in LI.FI calldata matches the beneficiary
         // LI.FI BridgeData struct has `receiver` at a known offset after the function selector
         // This prevents a compromised watchtower from stealing funds
+        //
+        // WARNING: This is a HEURISTIC defense suitable for MVP phase only.
+        // A sophisticated attacker with a compromised watchtower private key could theoretically
+        // craft calldata that includes the beneficiary address at a non-functional offset while
+        // routing funds elsewhere. For production, consider:
+        // - Decoding LI.FI calldata using a library and validating the actual receiver field
+        // - Using a multi-sig watchtower setup
+        // - Implementing a time-delayed withdrawal pattern
         if (_swapData.length >= 68) { // 4 bytes selector + 64 bytes for first struct fields
             // The receiver is typically the 2nd field in BridgeData (after bytes32 transactionId)
             // Offset: 4 (selector) + 32 (transactionId) + 12 (address padding) = 48
@@ -272,8 +280,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
                     break;
                 }
             }
-            // If beneficiary not found in calldata, this could be malicious
-            // Note: This is a heuristic check - in production, use a more robust validation
+            // If beneficiary not found in calldata, reject as potentially malicious
             if (!beneficiaryFound) {
                 revert InvalidBeneficiary();
             }
