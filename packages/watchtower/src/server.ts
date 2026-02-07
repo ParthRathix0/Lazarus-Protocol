@@ -109,21 +109,41 @@ app.post('/heartbeat', async (req, res) => {
 
         // Only send tx if the on-chain timestamp is older than 24 hours
         if (nowSeconds - lastPingSeconds > twentyFourHours) {
-          console.log(`[On-Chain] Last ping was ${nowSeconds - lastPingSeconds}s ago. Sending update...`);
-          
-          const hash = await walletClient.writeContract({
-            address: config.lazarusSourceAddress,
-            abi: LazarusSourceABI,
-            functionName: 'pingFor',
-            args: [address as Address],
-            chain: walletClient.chain,
-            account: walletClient.account!,
-          });
+          // Check if there's already a pending transaction for this user
+          const userAddr = (address as string).toLowerCase();
+          if (pendingUpdates.has(userAddr)) {
+            console.log(`[On-Chain] Skipping ${address} - transaction already in flight`);
+          } else {
+            console.log(`[On-Chain] Last ping was ${nowSeconds - lastPingSeconds}s ago. Sending update...`);
+            
+            // Mark as pending before sending
+            pendingUpdates.add(userAddr);
+            
+            try {
+              const hash = await walletClient.writeContract({
+                address: config.lazarusSourceAddress,
+                abi: LazarusSourceABI,
+                functionName: 'pingFor',
+                args: [address as Address],
+                chain: walletClient.chain,
+                account: walletClient.account!,
+              });
 
-          console.log(`[On-Chain] Ping tx sent for ${address}: ${hash}`);
-          
-          // Optional: Wait for receipt in background (don't block response)
-          publicClient.waitForTransactionReceipt({ hash }).catch(console.error);
+              console.log(`[On-Chain] Ping tx sent for ${address}: ${hash}`);
+              
+              // Wait for receipt in background and clean up pendingUpdates
+              publicClient.waitForTransactionReceipt({ hash })
+                .then(() => pendingUpdates.delete(userAddr))
+                .catch((err) => {
+                  console.error(`[On-Chain] Tx failed for ${address}:`, err);
+                  pendingUpdates.delete(userAddr);
+                });
+            } catch (txError) {
+              // Clean up on error
+              pendingUpdates.delete(userAddr);
+              throw txError;
+            }
+          }
         } else {
           console.log(`[On-Chain] Skipped update for ${address} (Synced < 24h ago)`);
         }
