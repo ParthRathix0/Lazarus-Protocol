@@ -117,6 +117,10 @@ async function executeLiquidation(
       };
     }
 
+    const feeBps = 100n;
+    const fee = (amountToLiquidate * feeBps) / 10000n;
+    const amountToSwap = amountToLiquidate - fee;
+
     // Try to get LI.FI route, fall back to mock if API fails
     let swapData: `0x${string}`;
     
@@ -124,7 +128,7 @@ async function executeLiquidation(
       const route = await getWethToUsdcRoute(
         tokenAddress,
         config.usdcAddress,
-        amountToLiquidate,
+        amountToSwap,
         config.lazarusSourceAddress,
         beneficiary,
         config.sourceChainId,
@@ -140,7 +144,7 @@ async function executeLiquidation(
       console.warn(`LI.FI API failed for user ${userAddress}, using mock data:`, lifiError);
       swapData = buildMockSwapData(
         tokenAddress,
-        amountToLiquidate,
+        amountToSwap,
         beneficiary,
         config.destinationChainId
       );
