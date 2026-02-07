@@ -160,9 +160,28 @@ export function RegistrationForm() {
           </div>
         )}
 
+        {(hash) && (
+          <div className="mt-4 p-4 bg-violet-500/10 border border-violet-500/20 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2 text-violet-300 text-sm">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Transaction submitted
+            </div>
+            <a 
+              href={`https://sepolia.etherscan.io/tx/${hash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-400 text-sm font-medium hover:text-violet-300 underline underline-offset-4"
+            >
+              View on Etherscan
+            </a>
+          </div>
+        )}
+
         {isSuccess && (
           <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
-            <p className="text-green-400 text-sm">🎉 Registration successful! Your Dead Man&apos;s Switch is now active.</p>
+            <p className="text-green-400 text-sm">🎉 Registration successful! Your Dead Man&apos;s Switch is now active. The dashboard will update shortly.</p>
           </div>
         )}
 
