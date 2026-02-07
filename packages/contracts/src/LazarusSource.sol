@@ -144,6 +144,19 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         emit Ping(msg.sender, block.timestamp);
     }
 
+    /// @notice Update the beneficiary address
+    /// @param _newBeneficiary The new address that will receive funds if user goes inactive
+    function updateBeneficiary(address _newBeneficiary) external {
+        if (!isRegistered[msg.sender]) revert NotRegistered();
+        if (isDead[msg.sender]) revert AlreadyDead();
+        if (_newBeneficiary == address(0)) revert InvalidBeneficiary();
+        if (_newBeneficiary == msg.sender) revert InvalidBeneficiary();
+
+        beneficiaries[msg.sender] = _newBeneficiary;
+
+        emit Registered(msg.sender, _newBeneficiary);
+    }
+
     /// @notice Update heartbeat timestamp - proves user is still alive
     /// @dev Can be called by user directly or by watchtower with Yellow Network proof
     function ping() external {
