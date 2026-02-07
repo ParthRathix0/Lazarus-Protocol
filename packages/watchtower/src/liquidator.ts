@@ -51,15 +51,15 @@ async function checkUserOnChain(
 }
 
 /**
- * Check token allowance and balance for a user
+ * Check token allowance, balance, and deposited amount for a user
  */
 async function checkUserTokens(
   publicClient: PublicClient,
   tokenAddress: Address,
   userAddress: Address,
   spenderAddress: Address
-): Promise<{ allowance: bigint; balance: bigint }> {
-  const [allowance, balance] = await Promise.all([
+): Promise<{ allowance: bigint; balance: bigint; depositedAmount: bigint }> {
+  const [allowance, balance, depositedAmount] = await Promise.all([
     publicClient.readContract({
       address: tokenAddress,
       abi: ERC20ABI,
@@ -72,9 +72,16 @@ async function checkUserTokens(
       functionName: 'balanceOf',
       args: [userAddress],
     }),
+    // Read deposited funds from LazarusSource contract
+    publicClient.readContract({
+      address: spenderAddress, // spenderAddress is the LazarusSource contract
+      abi: LazarusSourceABI,
+      functionName: 'userDeposits',
+      args: [userAddress, tokenAddress],
+    }),
   ]);
 
-  return { allowance, balance };
+  return { allowance, balance, depositedAmount };
 }
 
 /**
@@ -90,32 +97,29 @@ async function executeLiquidation(
   tokenSymbol: string
 ): Promise<LiquidationResult> {
   try {
-    // Check token allowance and balance
-    const { allowance, balance } = await checkUserTokens(
+    // Check token allowance, balance, and deposited amount
+    const { allowance, balance, depositedAmount } = await checkUserTokens(
       publicClient,
       tokenAddress,
       userAddress,
       config.lazarusSourceAddress
     );
 
-    if (allowance === 0n) {
-      return {
-        userAddress,
-        success: false,
-        error: `User has not approved ${tokenSymbol} for liquidation`,
-      };
-    }
+    // Calculate wallet-based amount (min of allowance and balance)
+    const walletAmount = allowance < balance ? allowance : balance;
 
-    // Use the minimum of allowance and balance
-    const amountToLiquidate = allowance < balance ? allowance : balance;
+    // Total liquidatable = wallet funds + deposited funds in contract
+    const amountToLiquidate = walletAmount + depositedAmount;
 
     if (amountToLiquidate === 0n) {
       return {
         userAddress,
         success: false,
-        error: `User has no ${tokenSymbol} to liquidate`,
+        error: `User has no ${tokenSymbol} to liquidate (wallet: ${walletAmount}, deposited: ${depositedAmount})`,
       };
     }
+
+    console.log(`[Liquidation] ${userAddress} - ${tokenSymbol}: wallet=${walletAmount}, deposited=${depositedAmount}, total=${amountToLiquidate}`);
 
     const feeBps = 100n;
     const fee = (amountToLiquidate * feeBps) / 10000n;
