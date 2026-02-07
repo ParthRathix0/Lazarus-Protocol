@@ -38,19 +38,20 @@ export function RegistrationForm() {
 
   // Helper to check if string is valid eth address (with regex fallback)
   const isValidAddress = (addr: string): boolean => {
-    // Try viem's isAddress first
-    if (isAddress(addr)) return true;
-    // Fallback to regex check
-    return /^0x[a-fA-F0-9]{40}$/.test(addr);
+    const viemResult = isAddress(addr);
+    const regexResult = /^0x[a-fA-F0-9]{40}$/.test(addr);
+    console.log('isValidAddress check:', { addr, viemResult, regexResult, length: addr.length });
+    return viemResult || regexResult;
   };
 
   // Compute resolved address directly - no useEffect needed
   const resolvedAddress: `0x${string}` | null = (() => {
-    // Direct address input - use our helper with fallback
-    if (isValidAddress(beneficiaryInput)) {
+    const isValid = beneficiaryInput ? isValidAddress(beneficiaryInput) : false;
+    console.log('resolvedAddress compute:', { beneficiaryInput, isValid, ensAddress });
+    
+    if (isValid) {
       return beneficiaryInput as `0x${string}`;
     }
-    // ENS resolved address
     if (ensAddress) {
       return ensAddress;
     }
@@ -58,7 +59,7 @@ export function RegistrationForm() {
   })();
 
   // Debug logging
-  console.log('Debug:', { beneficiaryInput, resolvedAddress, isConnected, isPending, isConfirming });
+  console.log('Final state:', { resolvedAddress, isConnected, canRegister: Boolean(isConnected && resolvedAddress && !isPending && !isConfirming) });
 
   const handleRegister = () => {
     if (!resolvedAddress || !address) return;
