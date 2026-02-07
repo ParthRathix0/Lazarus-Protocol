@@ -71,9 +71,6 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     /// @notice Emitted when the LI.FI Diamond is updated
     event LiFiDiamondUpdated(address indexed oldDiamond, address indexed newDiamond);
 
-    /// @notice Emitted when liquidation fails
-    event LiquidationFailed(address indexed user, address indexed token, string reason);
-
     /*//////////////////////////////////////////////////////////////
                                   ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -87,6 +84,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     error InvalidToken();
     error InsufficientAllowance();
     error ZeroAddress();
+    error BridgeCallFailed();
 
     /*//////////////////////////////////////////////////////////////
                                CONSTRUCTOR
@@ -211,7 +209,6 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         }
 
         // Mark user as dead (only on first liquidation call)
-        // Note: We still allow additional liquidate calls for different tokens
         if (!isDead[_user]) {
             isDead[_user] = true;
         }
@@ -240,14 +237,20 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         IERC20(_token).forceApprove(lifiDiamond, amountToBridge);
 
         // Execute LI.FI swap/bridge
-        // Using try/catch to ensure partial failures don't revert the whole operation
+        // We use .call and manually check success to bubble up the specific error message
         // solhint-disable-next-line avoid-low-level-calls
-        (bool success, ) = lifiDiamond.call(_swapData);
+        (bool success, bytes memory returnData) = lifiDiamond.call(_swapData);
         
         if (!success) {
-            // If bridge fails, emit event but don't revert
-            // Tokens are still in this contract and can be rescued
-            emit LiquidationFailed(_user, _token, "LI.FI call failed");
+            // Bubble up the error message from Li.Fi for easier debugging
+            if (returnData.length > 0) {
+                assembly {
+                    let returndata_size := mload(returnData)
+                    revert(add(32, returnData), returndata_size)
+                }
+            } else {
+                revert BridgeCallFailed();
+            }
         }
 
         emit Liquidated(_user, beneficiary, _token, amountToBridge);
