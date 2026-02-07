@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import cron from 'node-cron';
-import { loadConfig, createClients } from './config.js';
+import { loadConfig, createClients, LazarusSourceABI } from './config.js';
 import { getHeartbeatStore } from './database.js';
 import { verifyYellowSignature, type HeartbeatMessage } from './yellowSignature.js';
 import { runLiquidationCheck } from './liquidator.js';
@@ -10,6 +10,7 @@ import type { Address } from 'viem';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,40 +90,44 @@ app.post('/heartbeat', async (req, res) => {
     }
 
     // CRITICAL: Update the on-chain heartbeat via pingFor
-    // This ensures the contract's lastHeartbeat is updated, not just our database
+    // This ensures the contract's lastHeartbeat is updated if last update >24hrs ago
     try {
-      const hash = await walletClient.writeContract({
+      const [registered, , lastPing, dead] = await publicClient.readContract({
         address: config.lazarusSourceAddress,
-        abi: [
-          {
-            inputs: [{ name: '_user', type: 'address' }],
-            name: 'pingFor',
-            outputs: [],
-            stateMutability: 'nonpayable',
-            type: 'function',
-          },
-        ],
-        functionName: 'pingFor',
+        abi: LazarusSourceABI,
+        functionName: 'getUserInfo',
         args: [address as Address],
-        chain: walletClient.chain,
-        account: walletClient.account!,
       });
 
-      console.log(`[${new Date().toISOString()}] On-chain ping for ${address}: ${hash}`);
-      
-      // Wait for confirmation (non-blocking for UX, but log result)
-      publicClient.waitForTransactionReceipt({ hash }).then(receipt => {
-        if (receipt.status === 'success') {
-          console.log(`[${new Date().toISOString()}] On-chain ping confirmed for ${address}`);
+      if (registered && !dead) {
+        const lastPingSeconds = Number(lastPing);
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const twentyFourHours = 24 * 60 * 60;
+
+        // Only send tx if the on-chain timestamp is older than 24 hours
+        if (nowSeconds - lastPingSeconds > twentyFourHours) {
+          console.log(`[On-Chain] Last ping was ${nowSeconds - lastPingSeconds}s ago. Sending update...`);
+          
+          const hash = await walletClient.writeContract({
+            address: config.lazarusSourceAddress,
+            abi: LazarusSourceABI,
+            functionName: 'pingFor',
+            args: [address as Address],
+            chain: walletClient.chain,
+            account: walletClient.account!,
+          });
+
+          console.log(`[On-Chain] Ping tx sent for ${address}: ${hash}`);
+          
+          // Optional: Wait for receipt in background (don't block response)
+          publicClient.waitForTransactionReceipt({ hash }).catch(console.error);
         } else {
-          console.error(`[${new Date().toISOString()}] On-chain ping failed for ${address}`);
+          console.log(`[On-Chain] Skipped update for ${address} (Synced < 24h ago)`);
         }
-      }).catch(err => {
-        console.error(`[${new Date().toISOString()}] Error confirming ping for ${address}:`, err);
-      });
-    } catch (pingError) {
-      // Log but don't fail - user may not be registered yet
-      console.warn(`[${new Date().toISOString()}] Failed to call pingFor for ${address}:`, pingError);
+      }
+    } catch (chainError) {
+      // Don't fail the request if chain read fails, just log it
+      console.warn(`[On-Chain] Failed to check/update status for ${address}:`, chainError);
     }
 
     // Record the heartbeat in local database
