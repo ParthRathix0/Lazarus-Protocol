@@ -78,9 +78,11 @@ export const ERC20ABI = [
 export interface Config {
   watchtowerPrivateKey: `0x${string}`;
   sepoliaRpcUrl: string;
+  destinationRpcUrl: string;
   lazarusSourceAddress: Address;
+  lazarusVaultAddress: Address;
   lifiDiamondAddress: Address;
-  wethAddress: Address;
+  supportedTokens: { address: Address; symbol: string }[];
   usdcAddress: Address;
   sourceChainId: number;
   destinationChainId: number;
@@ -93,14 +95,23 @@ export function loadConfig(): Config {
     throw new Error('WATCHTOWER_PRIVATE_KEY is required');
   }
 
+  // Parse supported tokens from env (comma-separated: "WETH:0x...,USDC:0x...")
+  const tokensEnv = process.env.SUPPORTED_TOKENS || 'WETH:0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14,USDC:0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238';
+  const supportedTokens = tokensEnv.split(',').map(pair => {
+    const [symbol, address] = pair.split(':');
+    return { symbol, address: address as Address };
+  });
+
   return {
     watchtowerPrivateKey: watchtowerPrivateKey.startsWith('0x')
       ? (watchtowerPrivateKey as `0x${string}`)
       : (`0x${watchtowerPrivateKey}` as `0x${string}`),
     sepoliaRpcUrl: process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org',
+    destinationRpcUrl: process.env.DESTINATION_RPC_URL || 'https://arb1.arbitrum.io/rpc',
     lazarusSourceAddress: (process.env.LAZARUS_SOURCE_ADDRESS || '0x') as Address,
+    lazarusVaultAddress: (process.env.LAZARUS_VAULT_ADDRESS || '0x') as Address,
     lifiDiamondAddress: (process.env.LIFI_DIAMOND_ADDRESS || '0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE') as Address,
-    wethAddress: (process.env.WETH_ADDRESS || '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14') as Address,
+    supportedTokens,
     usdcAddress: (process.env.USDC_ADDRESS || '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238') as Address,
     sourceChainId: parseInt(process.env.SOURCE_CHAIN_ID || '11155111'),
     destinationChainId: parseInt(process.env.DESTINATION_CHAIN_ID || '42161'),

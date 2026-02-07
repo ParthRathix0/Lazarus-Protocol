@@ -78,20 +78,22 @@ async function checkUserTokens(
 }
 
 /**
- * Execute liquidation for a single user
+ * Execute liquidation for a single user and token
  */
 async function executeLiquidation(
   publicClient: PublicClient,
   walletClient: WalletClient,
   config: Config,
   userAddress: Address,
-  beneficiary: Address
+  beneficiary: Address,
+  tokenAddress: Address,
+  tokenSymbol: string
 ): Promise<LiquidationResult> {
   try {
     // Check token allowance and balance
     const { allowance, balance } = await checkUserTokens(
       publicClient,
-      config.wethAddress,
+      tokenAddress,
       userAddress,
       config.lazarusSourceAddress
     );
@@ -100,7 +102,7 @@ async function executeLiquidation(
       return {
         userAddress,
         success: false,
-        error: 'User has not approved tokens for liquidation',
+        error: `User has not approved ${tokenSymbol} for liquidation`,
       };
     }
 
@@ -111,7 +113,7 @@ async function executeLiquidation(
       return {
         userAddress,
         success: false,
-        error: 'User has no tokens to liquidate',
+        error: `User has no ${tokenSymbol} to liquidate`,
       };
     }
 
@@ -120,7 +122,7 @@ async function executeLiquidation(
     
     try {
       const route = await getWethToUsdcRoute(
-        config.wethAddress,
+        tokenAddress,
         config.usdcAddress,
         amountToLiquidate,
         config.lazarusSourceAddress,
@@ -137,7 +139,7 @@ async function executeLiquidation(
     } catch (lifiError) {
       console.warn(`LI.FI API failed for user ${userAddress}, using mock data:`, lifiError);
       swapData = buildMockSwapData(
-        config.wethAddress,
+        tokenAddress,
         amountToLiquidate,
         beneficiary,
         config.destinationChainId
@@ -150,7 +152,7 @@ async function executeLiquidation(
         address: config.lazarusSourceAddress,
         abi: LazarusSourceABI,
         functionName: 'liquidate',
-        args: [userAddress, config.wethAddress, swapData],
+        args: [userAddress, tokenAddress, swapData],
         account: walletClient.account,
       });
     } catch (simError) {
@@ -166,7 +168,7 @@ async function executeLiquidation(
       address: config.lazarusSourceAddress,
       abi: LazarusSourceABI,
       functionName: 'liquidate',
-      args: [userAddress, config.wethAddress, swapData],
+      args: [userAddress, tokenAddress, swapData],
       chain: walletClient.chain,
       account: walletClient.account!,
     });
@@ -175,10 +177,7 @@ async function executeLiquidation(
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
     if (receipt.status === 'success') {
-      // Remove user from heartbeat tracking
-      const store = getHeartbeatStore();
-      store.removeUser(userAddress);
-
+      // User removal is now handled in runLiquidationCheck after all tokens are processed
       return {
         userAddress,
         success: true,
@@ -237,23 +236,38 @@ export async function runLiquidationCheck(
 
     console.log(`Attempting to liquidate user ${userAddress}...`);
 
-    const result = await executeLiquidation(
-      publicClient,
-      walletClient,
-      config,
-      userAddress,
-      beneficiary
-    );
+    // Iterate through ALL supported tokens
+    let anySuccess = false;
+    for (const token of config.supportedTokens) {
+      console.log(`  Checking ${token.symbol} for user ${userAddress}...`);
+      
+      const result = await executeLiquidation(
+        publicClient,
+        walletClient,
+        config,
+        userAddress,
+        beneficiary,
+        token.address,
+        token.symbol
+      );
 
-    results.push(result);
+      results.push(result);
 
-    if (result.success) {
-      console.log(`Successfully liquidated ${userAddress}: ${result.txHash}`);
-    } else {
-      console.error(`Failed to liquidate ${userAddress}: ${result.error}`);
+      if (result.success) {
+        console.log(`  Successfully liquidated ${token.symbol}: ${result.txHash}`);
+        anySuccess = true;
+      } else if (!result.error?.includes('not approved')) {
+        // Only log non-approval errors (approval errors are expected for tokens user didn't approve)
+        console.warn(`  Failed ${token.symbol}: ${result.error}`);
+      }
+    }
+
+    // Remove user from tracking only if at least one token was liquidated
+    if (anySuccess) {
+      store.removeUser(userAddress);
     }
   }
 
-  console.log(`Liquidation check complete. Processed ${results.length} users.`);
+  console.log(`Liquidation check complete. Processed ${results.length} token liquidations.`);
   return results;
 }

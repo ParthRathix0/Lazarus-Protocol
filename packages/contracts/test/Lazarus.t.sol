@@ -271,16 +271,20 @@ contract LazarusTest is Test {
     function test_Liquidate_EmitLiquidatedEvent() public {
         _setupUserForLiquidation();
         
+        // Calculate expected amount after 1% watchtower fee
+        uint256 fee = (INITIAL_BALANCE * lazarusSource.LIQUIDATION_FEE_BPS()) / lazarusSource.BPS_DENOMINATOR();
+        uint256 expectedBridgedAmount = INITIAL_BALANCE - fee;
+        
         bytes memory swapData = abi.encodeWithSelector(
             MockLiFi.mockBridge.selector,
             address(weth),
-            INITIAL_BALANCE,
+            expectedBridgedAmount,
             beneficiary,
             uint256(42161)
         );
         
         vm.expectEmit(true, true, true, true);
-        emit LazarusSource.Liquidated(user, beneficiary, address(weth), INITIAL_BALANCE);
+        emit LazarusSource.Liquidated(user, beneficiary, address(weth), expectedBridgedAmount);
         
         vm.prank(watchtower);
         lazarusSource.liquidate(user, address(weth), swapData);

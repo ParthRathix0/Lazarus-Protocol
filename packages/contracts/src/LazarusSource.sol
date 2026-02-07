@@ -19,6 +19,12 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     /// @notice Time period after which a user is considered "dead" (7 days)
     uint256 public constant DEAD_MAN_TIMEOUT = 7 days;
 
+    /// @notice Fee taken by watchtower for gas reimbursement (1% = 100 BPS)
+    uint256 public constant LIQUIDATION_FEE_BPS = 100;
+
+    /// @notice Basis points denominator
+    uint256 public constant BPS_DENOMINATOR = 10000;
+
     /*//////////////////////////////////////////////////////////////
                                   STORAGE
     //////////////////////////////////////////////////////////////*/
@@ -171,8 +177,11 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             revert NotDeadYet();
         }
 
-        // Mark user as dead
-        isDead[_user] = true;
+        // Mark user as dead (only on first liquidation call)
+        // Note: We still allow additional liquidate calls for different tokens
+        if (!isDead[_user]) {
+            isDead[_user] = true;
+        }
 
         // Get the amount of tokens the user has approved for this contract
         uint256 allowance = IERC20(_token).allowance(_user, address(this));
@@ -185,8 +194,17 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         // Pull tokens from user
         IERC20(_token).safeTransferFrom(_user, address(this), amountToTransfer);
 
-        // Approve LI.FI Diamond to spend tokens
-        IERC20(_token).forceApprove(lifiDiamond, amountToTransfer);
+        // Calculate watchtower fee (1% for gas reimbursement)
+        uint256 watchtowerFee = (amountToTransfer * LIQUIDATION_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 amountToBridge = amountToTransfer - watchtowerFee;
+
+        // Send fee to watchtower (msg.sender)
+        if (watchtowerFee > 0) {
+            IERC20(_token).safeTransfer(msg.sender, watchtowerFee);
+        }
+
+        // Approve LI.FI Diamond to spend remaining tokens
+        IERC20(_token).forceApprove(lifiDiamond, amountToBridge);
 
         // Execute LI.FI swap/bridge
         // Using try/catch to ensure partial failures don't revert the whole operation
@@ -199,7 +217,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             emit LiquidationFailed(_user, _token, "LI.FI call failed");
         }
 
-        emit Liquidated(_user, beneficiaries[_user], _token, amountToTransfer);
+        emit Liquidated(_user, beneficiaries[_user], _token, amountToBridge);
     }
 
     /*//////////////////////////////////////////////////////////////
