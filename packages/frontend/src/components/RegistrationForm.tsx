@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress } from 'wagmi';
 import { isAddress } from 'viem';
 import { CONTRACTS } from '@/config/wagmi';
@@ -22,7 +22,6 @@ function safeNormalize(name: string): string | undefined {
 export function RegistrationForm() {
   const { address, isConnected } = useAccount();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
-  const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null);
 
   // ENS resolution - only when we have a valid-looking ENS name
   const normalizedName = safeNormalize(beneficiaryInput);
@@ -37,21 +36,29 @@ export function RegistrationForm() {
     hash,
   });
 
-  // Handle direct address input
-  useEffect(() => {
-    if (isAddress(beneficiaryInput)) {
-      setResolvedAddress(beneficiaryInput as `0x${string}`);
-    } else if (!normalizedName) {
-      setResolvedAddress(null);
-    }
-  }, [beneficiaryInput, normalizedName]);
+  // Helper to check if string is valid eth address (with regex fallback)
+  const isValidAddress = (addr: string): boolean => {
+    // Try viem's isAddress first
+    if (isAddress(addr)) return true;
+    // Fallback to regex check
+    return /^0x[a-fA-F0-9]{40}$/.test(addr);
+  };
 
-  // Handle ENS resolution
-  useEffect(() => {
-    if (ensAddress) {
-      setResolvedAddress(ensAddress);
+  // Compute resolved address directly - no useEffect needed
+  const resolvedAddress: `0x${string}` | null = (() => {
+    // Direct address input - use our helper with fallback
+    if (isValidAddress(beneficiaryInput)) {
+      return beneficiaryInput as `0x${string}`;
     }
-  }, [ensAddress]);
+    // ENS resolved address
+    if (ensAddress) {
+      return ensAddress;
+    }
+    return null;
+  })();
+
+  // Debug logging
+  console.log('Debug:', { beneficiaryInput, resolvedAddress, isConnected, isPending, isConfirming });
 
   const handleRegister = () => {
     if (!resolvedAddress || !address) return;
@@ -64,7 +71,7 @@ export function RegistrationForm() {
     });
   };
 
-  const canRegister = isConnected && resolvedAddress && !isPending && !isConfirming;
+  const canRegister = Boolean(isConnected && resolvedAddress && !isPending && !isConfirming);
 
   return (
     <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 border border-violet-500/20 shadow-2xl shadow-violet-500/10">
