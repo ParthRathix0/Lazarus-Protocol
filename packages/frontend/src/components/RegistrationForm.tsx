@@ -7,15 +7,30 @@ import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
 
+// Helper to safely normalize ENS names (avoid crash on partial input like "grandma.")
+function safeNormalize(name: string): string | undefined {
+  // Only try to normalize if it looks like a complete ENS name
+  // Must have a dot with characters on both sides
+  if (!name.includes('.')) return undefined;
+  if (name.endsWith('.') || name.startsWith('.')) return undefined;
+  
+  try {
+    return normalize(name);
+  } catch {
+    return undefined;
+  }
+}
+
 export function RegistrationForm() {
   const { address } = useAccount();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null);
   const [isResolving, setIsResolving] = useState(false);
 
-  // ENS resolution
+  // ENS resolution - only when we have a valid-looking ENS name
+  const normalizedName = safeNormalize(beneficiaryInput);
   const { data: ensAddress, isLoading: isEnsLoading } = useEnsAddress({
-    name: beneficiaryInput.includes('.') ? normalize(beneficiaryInput) : undefined,
+    name: normalizedName,
   });
 
   // Contract write
