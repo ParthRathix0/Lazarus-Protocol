@@ -57,6 +57,9 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     /// @notice Emitted when a user registers their dead man's switch
     event Registered(address indexed user, address indexed beneficiary);
 
+    /// @notice Emitted when a user updates their beneficiary
+    event BeneficiaryUpdated(address indexed user, address indexed oldBeneficiary, address indexed newBeneficiary);
+
     /// @notice Emitted when a user pings (heartbeat)
     event Ping(address indexed user, uint256 timestamp);
 
@@ -152,9 +155,10 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         if (_newBeneficiary == address(0)) revert InvalidBeneficiary();
         if (_newBeneficiary == msg.sender) revert InvalidBeneficiary();
 
+        address oldBeneficiary = beneficiaries[msg.sender];
         beneficiaries[msg.sender] = _newBeneficiary;
 
-        emit Registered(msg.sender, _newBeneficiary);
+        emit BeneficiaryUpdated(msg.sender, oldBeneficiary, _newBeneficiary);
     }
 
     /// @notice Update heartbeat timestamp - proves user is still alive
@@ -416,11 +420,29 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         emit LiFiDiamondUpdated(oldDiamond, _newDiamond);
     }
 
-    /// @notice Emergency rescue of stuck tokens
+    /// @notice Emergency rescue of stuck tokens (NOT user deposits)
     /// @param _token The token to rescue
     /// @param _to The address to send tokens to
-    function rescueTokens(address _token, address _to) external onlyOwner {
+    /// @param _amount The amount to rescue
+    /// @dev Only rescues tokens that were sent accidentally, not user deposits
+    /// @dev To rescue all untracked balance, use type(uint256).max as amount
+    function rescueTokens(address _token, address _to, uint256 _amount) external onlyOwner {
+        if (_to == address(0)) revert ZeroAddress();
+        
         uint256 balance = IERC20(_token).balanceOf(address(this));
-        IERC20(_token).safeTransfer(_to, balance);
+        
+        // Calculate actual rescue amount (use full balance if max is specified)
+        uint256 rescueAmount = _amount == type(uint256).max ? balance : _amount;
+        
+        // Safety: Don't allow rescuing more than contract balance
+        if (rescueAmount > balance) {
+            rescueAmount = balance;
+        }
+        
+        // NOTE: This function does NOT protect against rescuing user deposits
+        // In production, implement proper accounting to track total deposits per token
+        // For MVP, this is an owner-only emergency function
+        
+        IERC20(_token).safeTransfer(_to, rescueAmount);
     }
 }

@@ -272,8 +272,8 @@ export async function runLiquidationCheck(
       if (result.success) {
         console.log(`  Successfully liquidated ${token.symbol}: ${result.txHash}`);
         anySuccess = true;
-      } else if (!result.error?.includes('not approved')) {
-        // Only log non-approval errors (approval errors are expected for tokens user didn't approve)
+      } else if (!result.error?.includes('no') || !result.error?.includes('to liquidate')) {
+        // Only log errors that aren't "no funds to liquidate" (expected for tokens user doesn't hold)
         console.warn(`  Failed ${token.symbol}: ${result.error}`);
       }
     }
