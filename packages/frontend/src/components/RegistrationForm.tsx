@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress, useChainId } from 'wagmi';
 import { isAddress } from 'viem';
-import { mainnet, sepolia } from 'viem/chains';
+import { mainnet, sepolia } from 'wagmi/chains';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
@@ -99,10 +99,18 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     if (isENSAttempt) {
       if (isEnsLoading) return { type: 'loading', message: 'Resolving ENS...' };
       if (ensAddress) return { type: 'success', message: `✓ Resolved to ${ensAddress.slice(0, 6)}...${ensAddress.slice(-4)}` };
-      if (isEnsError || !ensAddress) return { type: 'error', message: '✗ ENS name not found or invalid' };
+      
+      // If we are here, it's either an error or not found
+      if (isEnsError) {
+        console.error('ENS resolution error for:', normalizedName);
+        return { type: 'error', message: '✗ ENS resolution error (Check console)' };
+      }
+      if (!isEnsLoading && !ensAddress) {
+        return { type: 'error', message: '✗ ENS name not found' };
+      }
     }
 
-    if (beneficiaryInput.length > 0) {
+    if (beneficiaryInput.length > 0 && !isAddressAttempt && !isENSAttempt) {
       return { type: 'error', message: '✗ Enter a valid 0x address or ENS name (.eth)' };
     }
 

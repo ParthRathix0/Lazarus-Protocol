@@ -8,7 +8,7 @@ export const config = getDefaultConfig({
   chains: [sepolia, mainnet],
   transports: {
     [sepolia.id]: http('https://eth-sepolia.g.alchemy.com/v2/1Ek2s__lHdCJ2Bc0POMLM'),
-    [mainnet.id]: http(),
+    [mainnet.id]: http('https://eth-mainnet.g.alchemy.com/v2/1Ek2s__lHdCJ2Bc0POMLM'),
   },
   ssr: true,
 });
