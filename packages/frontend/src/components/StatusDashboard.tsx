@@ -9,22 +9,33 @@ export function StatusDashboard() {
   const { address } = useAccount();
 
   // Read user info from contract
-  const { data: userInfo, isLoading: isUserLoading } = useReadContract({
+  const { data: userInfo, isLoading: isUserLoading, refetch: refetchInfo } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
     functionName: 'getUserInfo',
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { 
+      enabled: !!address,
+      refetchInterval: 10000 // Poll every 10s
+    },
   });
 
   // Read user status
-  const { data: userStatus } = useReadContract({
+  const { data: userStatus, refetch: refetchStatus } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
     functionName: 'checkUserStatus',
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    query: { 
+      enabled: !!address,
+      refetchInterval: 10000 // Poll every 10s
+    },
   });
+
+  const handleManualRefresh = () => {
+    refetchInfo();
+    refetchStatus();
+  };
 
   // Read token balances
   const { data: tokenData } = useReadContracts({
