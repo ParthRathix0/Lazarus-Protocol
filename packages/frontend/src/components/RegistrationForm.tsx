@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress, useChainId } from 'wagmi';
 import { isAddress } from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
@@ -117,7 +120,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     });
   };
 
-  const canRegister = Boolean(isConnected && resolvedAddress && !isPending && !isConfirming);
+  const canRegister = Boolean(isConnected && resolvedAddress && !isPending && !isConfirming && !isWrongChain);
 
   return (
     <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 border border-violet-500/20 shadow-2xl shadow-violet-500/10">
@@ -134,6 +137,11 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
       </div>
 
       <div className="space-y-4">
+        {isWrongChain && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4 text-center">
+            <p className="text-amber-400 text-sm font-medium">Please switch to Sepolia Network to register</p>
+          </div>
+        )}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">
             Beneficiary Address or ENS Name
