@@ -1,9 +1,6 @@
-'use client';
-
-import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress, useChainId } from 'wagmi';
 import { isAddress } from 'viem';
-import { mainnet } from 'viem/chains';
+import { mainnet, sepolia } from 'viem/chains';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
@@ -41,7 +38,10 @@ interface RegistrationFormProps {
 
 export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
+
+  const isWrongChain = isConnected && chainId !== sepolia.id;
 
   // Check input type
   const isAddressAttempt = beneficiaryInput.startsWith('0x');
