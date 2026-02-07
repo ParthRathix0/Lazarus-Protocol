@@ -26,6 +26,9 @@ const config = loadConfig();
 const { publicClient, walletClient } = createClients(config);
 const store = getHeartbeatStore();
 
+// Track pending on-chain updates to prevent race conditions and gas waste
+const pendingUpdates = new Set<string>();
+
 // Create Express app
 const app = express();
 
