@@ -92,21 +92,21 @@ contract LazarusVault is Ownable, ReentrancyGuard {
     /// @notice Deposit USDC for a beneficiary (authorized depositors only)
     /// @param _beneficiary The address that can claim these funds
     /// @dev Alternative for authorized bridge contracts that have already received tokens
-    function depositAuthorized(address _beneficiary) external nonReentrant {
+    function depositAuthorized(address _beneficiary, uint256 _amount) external nonReentrant {
         if (!authorizedDepositors[msg.sender]) revert NotAuthorizedDepositor();
         if (_beneficiary == address(0)) revert ZeroAddress();
+        if (_amount == 0) revert ZeroAmount();
         
         // Get balance that was sent to this contract but not yet tracked
         uint256 balance = IERC20(usdc).balanceOf(address(this));
-        uint256 newDeposit = balance > totalTrackedBalance ? balance - totalTrackedBalance : 0;
         
-        if (newDeposit == 0) revert ZeroAmount();
+        if (balance < totalTrackedBalance + _amount) revert InsufficientBalance();
         
         // Credit beneficiary's balance and update total
-        balances[_beneficiary] += newDeposit;
-        totalTrackedBalance += newDeposit;
+        balances[_beneficiary] += _amount;
+        totalTrackedBalance += _amount;
         
-        emit Deposited(msg.sender, _beneficiary, newDeposit);
+        emit Deposited(msg.sender, _beneficiary, _amount);
     }
 
     /*//////////////////////////////////////////////////////////////
