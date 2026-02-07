@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress } from 'wagmi';
 import { isAddress } from 'viem';
 import { CONTRACTS } from '@/config/wagmi';
@@ -9,8 +9,6 @@ import { normalize } from 'viem/ens';
 
 // Helper to safely normalize ENS names (avoid crash on partial input like "grandma.")
 function safeNormalize(name: string): string | undefined {
-  // Only try to normalize if it looks like a complete ENS name
-  // Must have a dot with characters on both sides
   if (!name.includes('.')) return undefined;
   if (name.endsWith('.') || name.startsWith('.')) return undefined;
   
@@ -22,10 +20,9 @@ function safeNormalize(name: string): string | undefined {
 }
 
 export function RegistrationForm() {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(null);
-  const [isResolving, setIsResolving] = useState(false);
 
   // ENS resolution - only when we have a valid-looking ENS name
   const normalizedName = safeNormalize(beneficiaryInput);
@@ -40,24 +37,21 @@ export function RegistrationForm() {
     hash,
   });
 
-  const handleBeneficiaryChange = (value: string) => {
-    setBeneficiaryInput(value);
-    
-    if (isAddress(value)) {
-      setResolvedAddress(value as `0x${string}`);
-    } else if (value.includes('.')) {
-      setIsResolving(true);
-    } else {
+  // Handle direct address input
+  useEffect(() => {
+    if (isAddress(beneficiaryInput)) {
+      setResolvedAddress(beneficiaryInput as `0x${string}`);
+    } else if (!normalizedName) {
       setResolvedAddress(null);
-      setIsResolving(false);
     }
-  };
+  }, [beneficiaryInput, normalizedName]);
 
-  // Update resolved address when ENS resolves
-  if (ensAddress && isResolving) {
-    setResolvedAddress(ensAddress);
-    setIsResolving(false);
-  }
+  // Handle ENS resolution
+  useEffect(() => {
+    if (ensAddress) {
+      setResolvedAddress(ensAddress);
+    }
+  }, [ensAddress]);
 
   const handleRegister = () => {
     if (!resolvedAddress || !address) return;
@@ -70,7 +64,7 @@ export function RegistrationForm() {
     });
   };
 
-  const canRegister = resolvedAddress && !isPending && !isConfirming;
+  const canRegister = isConnected && resolvedAddress && !isPending && !isConfirming;
 
   return (
     <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 border border-violet-500/20 shadow-2xl shadow-violet-500/10">
@@ -81,8 +75,8 @@ export function RegistrationForm() {
           </svg>
         </div>
         <div>
-          <h2 className="text-xl font-bold text-white">Enable Dead Man&apos;s Switch</h2>
-          <p className="text-slate-400 text-sm">Set your beneficiary to activate protection</p>
+          <h2 className="text-xl font-bold text-white">Register Beneficiary</h2>
+          <p className="text-slate-400 text-sm">Set who receives your assets if you go silent</p>
         </div>
       </div>
 
@@ -94,7 +88,7 @@ export function RegistrationForm() {
           <input
             type="text"
             value={beneficiaryInput}
-            onChange={(e) => handleBeneficiaryChange(e.target.value)}
+            onChange={(e) => setBeneficiaryInput(e.target.value)}
             placeholder="0x... or grandma.eth"
             className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
           />
@@ -109,9 +103,10 @@ export function RegistrationForm() {
             </p>
           )}
           
-          {resolvedAddress && beneficiaryInput.includes('.') && (
+          {resolvedAddress && beneficiaryInput && (
             <p className="mt-2 text-sm text-green-400">
-              ✓ Resolved to: {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+              ✓ {beneficiaryInput.includes('.') ? 'Resolved to: ' : 'Valid address: '}
+              {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
             </p>
           )}
         </div>
@@ -133,7 +128,7 @@ export function RegistrationForm() {
           disabled={!canRegister}
           className="w-full py-4 px-6 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40"
         >
-          {isPending ? 'Confirming in Wallet...' : isConfirming ? 'Processing...' : 'Enable Switch'}
+          {isPending ? 'Confirming in Wallet...' : isConfirming ? 'Processing...' : 'Register Beneficiary'}
         </button>
       </div>
     </div>
