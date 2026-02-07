@@ -141,7 +141,15 @@ async function executeLiquidation(
 
       swapData = route.transactionRequest.data;
     } catch (lifiError) {
-      console.warn(`LI.FI API failed for user ${userAddress}, using mock data:`, lifiError);
+      // DANGER: Mock data should ONLY be used in development/testnet
+      // In production, we must fail if LI.FI API is unavailable
+      const isDevelopment = process.env.NODE_ENV === 'development' || process.env.USE_MOCK_SWAP === 'true';
+      
+      if (!isDevelopment) {
+        throw new Error(`LI.FI API failed in production for user ${userAddress}: ${lifiError instanceof Error ? lifiError.message : 'Unknown error'}`);
+      }
+      
+      console.warn(`[DEV ONLY] LI.FI API failed for user ${userAddress}, using mock data:`, lifiError);
       swapData = buildMockSwapData(
         tokenAddress,
         amountToSwap,
