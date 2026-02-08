@@ -85,4 +85,4 @@ A robust Node.js service that tracks heartbeats off-chain and executes the liqui
 ---
 
 ## License
-[MIT](./LICENSE)
+[CC BY-NC-ND 4.0](./LICENSE)
