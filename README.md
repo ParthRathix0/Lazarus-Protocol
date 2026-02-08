@@ -31,15 +31,15 @@ Lazarus Protocol leverages several cutting-edge protocols to ensure a seamless a
 
 ### 1. LI.FI (Cross-Chain Execution Layer)
 We use the **LI.FI API** for our core "Evacuation" logic. When a user is detected as inactive, the Watchtower fetches a swap-and-bridge quote from LI.FI to move assets (e.g., WETH) on Sepolia to USDC on Arbitrum Sepolia in a single atomic transaction.
-- **Integration**: Programmatic quote fetching and calldata execution via the `LazarusSource.liquidate` function.
+- **Integration Details**: [📖 SPONSOR_LIFI.md](./SPONSOR_LIFI.md)
 
 ### 2. ENS (Ethereum Name Service)
 To improve user experience and security, we integrate **ENS** for beneficiary registration.
-- **Integration**: Uses `wagmi` hooks to resolve human-readable names to `0x` addresses. We implemented a specialized multi-chain transport that allows resolution from Ethereum Mainnet even while the app is connected to the Sepolia testnet.
+- **Integration Details**: [📖 SPONSOR_ENS.md](./SPONSOR_ENS.md)
 
 ### 3. Yellow Network (Nitrolite Protocol)
 Lazarus Protocol implements "Gas-Free Heartbeats" using session-based logic inspired by the **Yellow SDK**.
-- **Integration**: Users sign EIP-712 "Heartbeat" messages off-chain. These signatures are collected and verified by the Watchtower to prove liveness without requiring the user to pay gas for every daily check-in. On-chain settlement (liquidation) only occurs if these off-chain session proofs stop arriving.
+- **Integration Details**: [📖 SPONSOR_YELLOW.md](./SPONSOR_YELLOW.md)
 
 ---
 
