@@ -142,7 +142,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     function register(address _beneficiary, uint256 _inactivityPeriod) external {
         if (_beneficiary == address(0)) revert InvalidBeneficiary();
         if (_beneficiary == msg.sender) revert InvalidBeneficiary();
-        if (_inactivityPeriod < 60) revert ZeroAmount(); // Min 1 minute
+        if (_inactivityPeriod < 30) revert ZeroAmount(); // Min 30 seconds
         if (isRegistered[msg.sender]) revert AlreadyRegistered();
 
         beneficiaries[msg.sender] = _beneficiary;
@@ -159,7 +159,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     function updateInactivityPeriod(uint256 _newPeriod) external {
         if (!isRegistered[msg.sender]) revert NotRegistered();
         if (isDead[msg.sender]) revert AlreadyDead();
-        if (_newPeriod < 60) revert ZeroAmount();
+        if (_newPeriod < 30) revert ZeroAmount();
 
         uint256 oldPeriod = inactivityPeriods[msg.sender];
         inactivityPeriods[msg.sender] = _newPeriod;

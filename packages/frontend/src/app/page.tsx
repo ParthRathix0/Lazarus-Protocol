@@ -69,29 +69,29 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 max-w-4xl mx-auto">
               <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl">
                 <div className="w-12 h-12 rounded-xl bg-violet-500/20 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">🛡️</span>
+                  <span className="text-2xl">🟡</span>
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Set & Forget</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">Yellow Liquidity</h3>
                 <p className="text-slate-400 text-sm">
-                  Register once, enable auto-ping, and your assets are protected forever.
+                  Integrated with Yellow Network for deep liquidity and gas-free heartbeat sessions.
                 </p>
               </div>
               <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl">
                 <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
                   <span className="text-2xl">🌉</span>
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Cross-Chain</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">LI.FI Bridge</h3>
                 <p className="text-slate-400 text-sm">
-                  Assets are automatically swapped and bridged to your beneficiary on Arc Network.
+                  Autonomous cross-chain evacuation. Assets are swapped and bridged to your beneficiary on Arbitrum.
                 </p>
               </div>
               <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-2xl">
                 <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl">🔐</span>
+                  <span className="text-2xl">⏳</span>
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Secure</h3>
+                <h3 className="text-lg font-semibold text-white mb-2">Custom Timeout</h3>
                 <p className="text-slate-400 text-sm">
-                  7-day timeout, on-chain verification, and non-custodial design.
+                  Define your own cooldown. Assets are sent to the ENS address of your beneficiary after your custom timeout.
                 </p>
               </div>
             </div>
@@ -150,7 +150,7 @@ export default function Home() {
                   <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
                     <span className="text-xl font-bold text-violet-400">4</span>
                   </div>
-                  <p className="text-slate-300 text-sm">If silent for 7 days, assets go to beneficiary</p>
+                  <p className="text-slate-300 text-sm">If silent for your custom period, assets go to beneficiary</p>
                 </div>
               </div>
             </div>

@@ -8,6 +8,7 @@ import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
 
 const PERIOD_OPTIONS = [
+  { label: '30 Seconds (Test)', value: 30 },
   { label: '1 Minute (Test)', value: 60 },
   { label: '3 Days', value: 259200 },
   { label: '7 Days', value: 604800 },

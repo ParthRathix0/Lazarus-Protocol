@@ -1,18 +1,61 @@
 # Lazarus Protocol
 
-**A cross-chain dead man's switch for secure asset evacuation.**
+**A decentralized, cross-chain dead man's switch for secure asset evacuation.**
 
 ## The Problem
-In the event of user inactivity, catastrophic events, or loss of access, digital assets often remain stranded in "dead" wallets. Manual transfers are impossible, and current custodial solutions require trusting a third party with full control. Existing on-chain switches are often limited to a single network, leaving assets vulnerable if the source chain becomes congested or inaccessible.
+In the event of user inactivity, catastrophic events, or loss of access, digital assets often remain stranded in "dead" wallets. Existing on-chain switches are often limited to a single network, leaving assets vulnerable if the source chain becomes congested or inaccessible. Manual transfers are impossible, and custodial solutions require trusting third parties.
 
 ## The Solution: Lazarus Protocol
-Lazarus Protocol provides a decentralized, cross-chain insurance policy for your digital assets. It monitors user liveness on an active "Source" chain and, upon detecting prolonged inactivity, automatically evacuates funds to a secure "Vault" on a different "Destination" chain.
+Lazarus provides a decentralized insurance policy for digital assets. It monitors user liveness on an active "Source" chain (Sepolia) and, upon detecting prolonged inactivity, automatically evacuates funds to a secure "Vault" on a different "Destination" chain (Arbitrum Sepolia).
 
-### How it Works
-1.  **Monitor & Heartbeat**: Users register on the `LazarusSource` contract (Sepolia) and define a beneficiary. Every deposit, withdrawal, or manual "ping" resets a 7-day heartbeat timer.
-2.  **Autonomous Detection**: An off-chain **Watchtower** monitors the source contract events. If a user fails to ping for 7 days, they are marked as potentially inactive.
-3.  **Cross-Chain Evacuation**: The Watchtower triggers a `liquidate` call. This initiates a cross-chain swap and bridge via **LI.FI**, moving the user's WETH/USDC from Sepolia directly to the `LazarusVault` on **Arbitrum Sepolia**.
-4.  **Beneficiary Claim**: The funds are held securely in the vault, where only the designated beneficiary can claim them.
+### Protocol Lifecycle
+1.  **Registration**: Users register on `LazarusSource` and define a beneficiary and a custom **Inactivity Period** (ranging from 3 days to 1 year).
+2.  **Off-Chain Handshake**: Users sign EIP-712 "Heartbeat" messages. These are sent to the **Watchtower** and verified off-chain, ensuring 0% gas cost for liveness proofs.
+3.  **Autonomous Liquidation**: If the Watchtower detects that the last heartbeat exceeds the user's cooldown, it fetches an optimized swap-and-bridge route from **LI.FI**.
+4.  **Cross-Chain Settlement**: The Watchtower executes the `liquidate` call on L1. Funds are swapped from L1 WETH to L2 USDC and bridged to the `LazarusVault`.
+5.  **Beneficiary Recovery**: The designated beneficiary claims the funds from the Vault on the destination chain.
+
+---
+
+### 4. Yellow Liquidity Integration
+Liquidation events tap into the **Yellow Network Liquidity Pools**, ensuring that even during high volatility or large asset evacuations, the protocol can fulfill swaps with minimal slippage and maximum efficiency.
+
+---
+
+## Technical Architecture
+
+The protocol is designed with a **Separation of Concerns** between liveness tracking and asset execution.
+
+### 1. Decoupled Liveness Pattern (Yellow Network inspired)
+The heartbeat logic is entirely decoupled from the blockchain. We use a **Session-based Logic** where valid signatures represent proof-of-life. This state is settled on-chain only during a liquidation event. This architecture allows for sub-minute heartbeat resolution without incurring any on-chain load.
+
+### 2. LI.FI Diamond Delegation
+The `LazarusSource` contract does not implement specific bridge or DEX logic. Instead, it interacts with the **LI.FI Diamond**. This makes the protocol future-proof: it can support any asset or bridge that LI.FI supports without a contract upgrade.
+
+### 3. Distributed Vaulting
+Assets landing on the destination chain are held in a **Multi-User Vault**. This prevents funds from being "lost" if a beneficiary's wallet isn't immediately ready or if the destination chain gas is high at the time of arrival.
+
+---
+
+## Threats & Mitigations
+
+We have analyzed the primary threats to an autonomous cross-chain protocol and implemented the following mitigations:
+
+### 1. Gas Wars & L1 Congestion
+**Threat**: High gas prices on the Source chain could prevent the Watchtower from calling `liquidate` in time, stalling the evacuation.
+**Mitigation**: The Watchtower service implements **Dynamic Fee Management**. It monitors `baseFee` and `priorityFee` to ensure transactions are included even during spikes. Furthermore, users are encouraged to set a multi-day cooldown for mainnet use, providing an ample window for the Watchtower to land the transaction.
+
+### 2. Watchtower Centralization / Downtime
+**Threat**: If the Watchtower goes offline, inactivity won't be detected.
+**Mitigation**: The protocol is designed to be **Watchtower Agnostic**. Any party possessing a valid user heartbeat signature (or proof of on-chain inactivity) can trigger the `liquidate` call. While our core service provides this utility, the smart contracts allow anyone with the required evidence to finalize the session.
+
+### 3. Signature Replay & Malleability
+**Threat**: An attacker could reuse an old heartbeat to "resurrect" a dead user.
+**Mitigation**: Every heartbeat signature includes a **unique, incrementing nonce** and a timestamp. The Watchtower and contracts verify these against previously stored nonces to prevent replay attacks.
+
+### 4. Bridge Default / Liquidity Risk (Yellow/LI.FI Solution)
+**Threat**: LI.FI might fail to find a route or a bridge might be compromised.
+**Mitigation**: By using LI.FI as a **Liquidity Aggregator** and tapping into **Yellow Liquidity Pools**, the protocol is not dependent on any single bridge or DEX. If one path is blocked, the protocol automatically routes through the deepest available liquidity, ensuring the evacuation path remains open.
 
 ---
 
@@ -25,62 +68,10 @@ Lazarus Protocol provides a decentralized, cross-chain insurance policy for your
 
 ---
 
-## Technologies Used (Sponsor Tracks)
-
-Lazarus Protocol leverages several cutting-edge protocols to ensure a seamless and secure cross-chain experience:
-
-### 1. Yellow Network (Nitrolite Protocol)
-Lazarus Protocol implements "Gas-Free Heartbeats" using session-based logic inspired by the **Yellow SDK**.
-- **Integration Details**: [📖 YELLOW.md](./YELLOW.md)
-
-### 2. LI.FI (Cross-Chain Execution Layer)
-We use the **LI.FI API** for our core "Evacuation" logic. When a user is detected as inactive, the Watchtower fetches a swap-and-bridge quote from LI.FI to move assets (e.g., WETH) on Sepolia to USDC on Arbitrum Sepolia in a single atomic transaction.
-- **Integration Details**: [📖 LIFI.md](./LIFI.md)
-
-### 2. ENS (Ethereum Name Service)
-To improve user experience and security, we integrate **ENS** for beneficiary registration.
-- **Integration Details**: [📖 ENS.md](./ENS.md)
-
-
----
-
-## Technical Architecture
-
-The protocol is divided into three main components:
-
-### 1. Smart Contracts
-The core logic governing liveness, deposits, and the secure vault.
-- **Source**: `LazarusSource.sol` (Sepolia)
-- **Vault**: `LazarusVault.sol` (Arbitrum Sepolia)
-- [📖 Contracts Documentation](./packages/contracts/README.md)
-
-### 2. Frontend Dashboard
-A modern, responsive Next.js application for users to manage their protection status, heartbeats, and beneficiaries.
-- **Tech Stack**: Next.js 16, RainbowKit, Wagmi, Tailwind CSS.
-- [📖 Frontend Documentation](./packages/frontend/README.md)
-
-### 3. Watchtower Service
-A robust Node.js service that tracks heartbeats off-chain and executes the liquidation logic when needed.
-- **Tech Stack**: TypeScript, Viem, SQLite, LI.FI API.
-- [📖 Watchtower Documentation](./packages/watchtower/README.md)
-
----
-
-## Quick Start (Monorepo)
-
-1.  **Install Dependencies**:
-    ```bash
-    # Root level
-    npm install
-    ```
-
-2.  **Environment Setup**:
-    Follow the `.env.example` in each package directory.
-
-3.  **Development**:
-    - Contracts: `cd packages/contracts && forge build`
-    - Frontend: `cd packages/frontend && npm run dev`
-    - Watchtower: `cd packages/watchtower && npm run dev`
+## Technologies Integrated
+- **LI.FI Orchestration**: [Cross-Chain execution and liquidity layer](./LIFI.md)
+- **Yellow Network Sessions**: [Off-chain session logic for Gas-Free Heartbeats](./YELLOW.md)
+- **ENS Resolution**: [Human-readable beneficiary resolution](./ENS.md)
 
 ---
 
