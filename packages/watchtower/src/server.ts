@@ -79,7 +79,8 @@ app.post('/heartbeat', async (req, res) => {
     const verificationResult = await verifyYellowSignature(
       heartbeatMessage,
       signature as `0x${string}`,
-      address as Address
+      address as Address,
+      config.sourceChainId
     );
 
     if (!verificationResult.valid) {

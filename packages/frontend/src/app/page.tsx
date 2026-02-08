@@ -12,16 +12,18 @@ export default function Home() {
   const { address, isConnected } = useAccount();
 
   // Check if user is registered
-  const { data: isRegistered, refetch: refetchStatus, isLoading: isStatusLoading } = useReadContract({
+  const { data: userInfo, refetch: refetchStatus, isLoading: isStatusLoading } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
-    functionName: 'isRegistered',
+    functionName: 'getUserInfo',
     args: address ? [address] : undefined,
     query: { 
       enabled: !!address,
       refetchInterval: 10000 // Poll every 10s
     },
   });
+
+  const isRegistered = !!userInfo?.[0];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-violet-950/20 to-slate-950">

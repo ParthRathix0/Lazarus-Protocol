@@ -3,11 +3,11 @@ import { verifyTypedData, type Address } from 'viem';
 /**
  * EIP-712 Domain for Yellow Network Heartbeat verification
  */
-export const HEARTBEAT_DOMAIN = {
+export const getHeartbeatDomain = (chainId: number | bigint) => ({
   name: 'Lazarus Protocol',
   version: '1',
-  chainId: 11155111n, // Sepolia
-} as const;
+  chainId: BigInt(chainId),
+});
 
 /**
  * EIP-712 Types for Heartbeat message
@@ -38,7 +38,8 @@ export interface VerificationResult {
 export async function verifyYellowSignature(
   message: HeartbeatMessage,
   signature: `0x${string}`,
-  expectedSigner: Address
+  expectedSigner: Address,
+  chainId: number | bigint
 ): Promise<VerificationResult> {
   try {
     // Verify the message was signed recently (within 5 minutes)
@@ -55,7 +56,7 @@ export async function verifyYellowSignature(
     // Verify the signature using EIP-712 typed data
     const isValid = await verifyTypedData({
       address: expectedSigner,
-      domain: HEARTBEAT_DOMAIN,
+      domain: getHeartbeatDomain(chainId),
       types: HEARTBEAT_TYPES,
       primaryType: 'Heartbeat',
       message: {
@@ -102,9 +103,9 @@ export function generateHeartbeatMessage(): HeartbeatMessage {
 /**
  * Get the EIP-712 signing payload for frontend use
  */
-export function getSigningPayload(message: HeartbeatMessage) {
+export function getSigningPayload(message: HeartbeatMessage, chainId: number | bigint) {
   return {
-    domain: HEARTBEAT_DOMAIN,
+    domain: getHeartbeatDomain(chainId),
     types: HEARTBEAT_TYPES,
     primaryType: 'Heartbeat' as const,
     message: {

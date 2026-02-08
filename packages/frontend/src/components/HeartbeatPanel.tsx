@@ -10,10 +10,12 @@ import { formatEther } from 'viem';
 import { formatError } from '@/utils/error';
 
 // EIP-712 Domain for Yellow Network Heartbeat
+const SOURCE_CHAIN_ID = BigInt(process.env.NEXT_PUBLIC_SOURCE_CHAIN_ID || 11155111);
+
 const HEARTBEAT_DOMAIN = {
   name: 'Lazarus Protocol',
   version: '1',
-  chainId: BigInt(11155111), // Sepolia
+  chainId: SOURCE_CHAIN_ID,
 } as const;
 
 const HEARTBEAT_TYPES = {
@@ -57,10 +59,10 @@ function getAddressValidationError(addr: string): string | undefined {
 
 export function HeartbeatPanel() {
   const { address } = useAccount();
-  const [lastPing, setLastPing] = useState<Date | null>(null);
   const [isPinging, setIsPinging] = useState(false);
   const [heartbeatStatus, setHeartbeatStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [heartbeatError, setHeartbeatError] = useState('');
+  const [remindersEnabled, setRemindersEnabled] = useState(false);
 
   // Settings state
   const [newBeneficiaryInput, setNewBeneficiaryInput] = useState('');
@@ -159,7 +161,7 @@ export function HeartbeatPanel() {
 
   // Update Beneficiary & Period
   const { writeContract, data: txHash, error: writeError, isPending: isTxPending } = useWriteContract();
-  const { isLoading: isConfirming, isSuccessValue } = useWaitForTransactionReceipt({ hash: txHash });
+  const { isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash });
 
   // Use a simpler success check
   useEffect(() => {
@@ -231,7 +233,6 @@ export function HeartbeatPanel() {
       }
 
       console.log('[Heartbeat] Success:', data);
-      setLastPing(new Date());
       setHeartbeatStatus('success');
       refetchStatus();
     } catch (err) {
@@ -318,6 +319,19 @@ export function HeartbeatPanel() {
               </span>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between mb-6 p-4 bg-slate-950/30 rounded-xl border border-slate-700/50">
+          <div>
+            <p className="text-white font-semibold text-sm">Ping Reminder</p>
+            <p className="text-slate-500 text-[10px]">Requires wallet confirmation each time.</p>
+          </div>
+          <button 
+            onClick={() => setRemindersEnabled(!remindersEnabled)}
+            className={`w-12 h-6 rounded-full p-1 transition-colors duration-200 ease-in-out ${remindersEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+          >
+            <div className={`w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out ${remindersEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+          </button>
         </div>
 
         <button

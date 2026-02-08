@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export function formatError(error: any): string {
   if (!error) return '';
   
