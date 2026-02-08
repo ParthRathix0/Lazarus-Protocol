@@ -141,7 +141,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   })();
 
   // Double check registration status directly in this component
-  const { data: userInfo } = useReadContract({
+  const { data: userInfo, isLoading: isStatusLoading, isError: isStatusError } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
     functionName: 'getUserInfo',
@@ -180,7 +180,9 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     !isConfirming && 
     !isWrongChain && 
     !isAlreadyRegistered &&
-    !isSelfRegistration
+    !isSelfRegistration &&
+    !isStatusLoading && // Ensure we know status before allowing register
+    !isStatusError // Disable if we cannot verify status (prevents false negatives)
   );
 
   return (
@@ -213,6 +215,12 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         {isSelfRegistration && !isAlreadyRegistered && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-center">
             <p className="text-red-400 text-sm font-medium">✗ You cannot set yourself as your own beneficiary</p>
+          </div>
+        )}
+
+        {isStatusError && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-center">
+            <p className="text-red-400 text-sm font-medium">⚠️ Failed to verify registration status. Check your connection.</p>
           </div>
         )}
         <div>

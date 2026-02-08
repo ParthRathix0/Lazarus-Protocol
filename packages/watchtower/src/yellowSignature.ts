@@ -1,13 +1,17 @@
 import { verifyTypedData, type Address } from 'viem';
+import { loadConfig } from './config.js'; // FIX: Import config loader
+
+// Load config to get the correct Chain ID
+const config = loadConfig();
 
 /**
  * EIP-712 Domain for Yellow Network Heartbeat verification
  */
-export const getHeartbeatDomain = (chainId: number | bigint) => ({
+export const HEARTBEAT_DOMAIN = {
   name: 'Lazarus Protocol',
   version: '1',
-  chainId: BigInt(chainId),
-});
+  chainId: BigInt(config.sourceChainId), // FIX: Use config value, do not hardcode
+} as const;
 
 /**
  * EIP-712 Types for Heartbeat message
@@ -38,8 +42,7 @@ export interface VerificationResult {
 export async function verifyYellowSignature(
   message: HeartbeatMessage,
   signature: `0x${string}`,
-  expectedSigner: Address,
-  chainId: number | bigint
+  expectedSigner: Address
 ): Promise<VerificationResult> {
   try {
     // Verify the message was signed recently (within 5 minutes)
@@ -56,7 +59,7 @@ export async function verifyYellowSignature(
     // Verify the signature using EIP-712 typed data
     const isValid = await verifyTypedData({
       address: expectedSigner,
-      domain: getHeartbeatDomain(chainId),
+      domain: HEARTBEAT_DOMAIN,
       types: HEARTBEAT_TYPES,
       primaryType: 'Heartbeat',
       message: {
@@ -84,34 +87,4 @@ export async function verifyYellowSignature(
       error: error instanceof Error ? error.message : 'Unknown error during verification',
     };
   }
-}
-
-/**
- * Generate the message to be signed for a heartbeat
- */
-export function generateHeartbeatMessage(): HeartbeatMessage {
-  const timestamp = BigInt(Math.floor(Date.now() / 1000));
-  const nonce = BigInt(Math.floor(Math.random() * 1000000));
-  
-  return {
-    message: 'I am alive',
-    timestamp,
-    nonce,
-  };
-}
-
-/**
- * Get the EIP-712 signing payload for frontend use
- */
-export function getSigningPayload(message: HeartbeatMessage, chainId: number | bigint) {
-  return {
-    domain: getHeartbeatDomain(chainId),
-    types: HEARTBEAT_TYPES,
-    primaryType: 'Heartbeat' as const,
-    message: {
-      message: message.message,
-      timestamp: message.timestamp,
-      nonce: message.nonce,
-    },
-  };
 }
