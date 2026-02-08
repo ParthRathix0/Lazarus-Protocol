@@ -141,15 +141,15 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   })();
 
   // Double check registration status directly in this component
-  const { data: contractRegistered } = useReadContract({
+  const { data: userInfo } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
-    functionName: 'isRegistered',
+    functionName: 'getUserInfo',
     args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
 
-  const isAlreadyRegistered = Boolean(contractRegistered);
+  const isAlreadyRegistered = Boolean(userInfo?.[0]);
   const isSelfRegistration = resolvedAddress?.toLowerCase() === address?.toLowerCase();
 
   const handleRegister = () => {
