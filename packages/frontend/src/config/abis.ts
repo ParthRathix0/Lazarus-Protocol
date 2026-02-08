@@ -8,6 +8,13 @@ export const LazarusSourceABI = [
     type: 'function',
   },
   {
+    inputs: [{ name: '_newBeneficiary', type: 'address' }],
+    name: 'updateBeneficiary',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [],
     name: 'ping',
     outputs: [],
