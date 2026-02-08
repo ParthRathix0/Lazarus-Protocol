@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress, useChainId } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress, useChainId, useReadContract } from 'wagmi';
 import { isAddress } from 'viem';
 import { mainnet, sepolia } from 'wagmi/chains';
 import { CONTRACTS } from '@/config/wagmi';
@@ -98,7 +98,12 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
 
     if (isENSAttempt) {
       if (isEnsLoading) return { type: 'loading', message: 'Resolving ENS...' };
-      if (ensAddress) return { type: 'success', message: `✓ Resolved to ${ensAddress.slice(0, 6)}...${ensAddress.slice(-4)}` };
+      if (ensAddress) {
+        if (ensAddress.toLowerCase() === address?.toLowerCase()) {
+          return { type: 'error', message: '✗ You cannot be your own beneficiary' };
+        }
+        return { type: 'success', message: `✓ Resolved to ${ensAddress.slice(0, 6)}...${ensAddress.slice(-4)}` };
+      }
       
       // If we are here, it's either an error or not found
       if (isEnsError) {
@@ -110,6 +115,11 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
       }
     }
 
+    // Direct address self-check
+    if (isAddressAttempt && !addressError && beneficiaryInput.toLowerCase() === address?.toLowerCase()) {
+      return { type: 'error', message: '✗ You cannot be your own beneficiary' };
+    }
+
     if (beneficiaryInput.length > 0 && !isAddressAttempt && !isENSAttempt) {
       return { type: 'error', message: '✗ Enter a valid 0x address or ENS name (.eth)' };
     }
@@ -117,8 +127,30 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     return null;
   })();
 
+  // Double check registration status directly in this component
+  const { data: contractRegistered } = useReadContract({
+    address: CONTRACTS.lazarusSource,
+    abi: LazarusSourceABI,
+    functionName: 'isRegistered',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address },
+  });
+
+  const isAlreadyRegistered = Boolean(contractRegistered);
+  const isSelfRegistration = resolvedAddress?.toLowerCase() === address?.toLowerCase();
+
   const handleRegister = () => {
     if (!resolvedAddress || !address) return;
+    
+    if (isSelfRegistration) {
+      console.error('Registration failed: Cannot register yourself as beneficiary');
+      return;
+    }
+
+    if (isAlreadyRegistered) {
+      console.error('Registration failed: Already registered');
+      return;
+    }
 
     writeContract({
       address: CONTRACTS.lazarusSource,
@@ -128,7 +160,15 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     });
   };
 
-  const canRegister = Boolean(isConnected && resolvedAddress && !isPending && !isConfirming && !isWrongChain);
+  const canRegister = Boolean(
+    isConnected && 
+    resolvedAddress && 
+    !isPending && 
+    !isConfirming && 
+    !isWrongChain && 
+    !isAlreadyRegistered &&
+    !isSelfRegistration
+  );
 
   return (
     <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 border border-violet-500/20 shadow-2xl shadow-violet-500/10">
@@ -137,6 +177,12 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
+        </div>
+        <div className="flex justify-between text-xs text-slate-500 mb-2 px-1">
+          <span>Your Address: {address?.slice(0, 6)}...{address?.slice(-4)}</span>
+          {resolvedAddress && (
+            <span>Target: {resolvedAddress?.slice(0, 6)}...{resolvedAddress?.slice(-4)}</span>
+          )}
         </div>
         <div>
           <h2 className="text-xl font-bold text-white">Register Beneficiary</h2>
@@ -148,6 +194,18 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         {isWrongChain && (
           <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4 text-center">
             <p className="text-amber-400 text-sm font-medium">Please switch to Sepolia Network to register</p>
+          </div>
+        )}
+
+        {isAlreadyRegistered && (
+          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl mb-4 text-center">
+            <p className="text-amber-400 text-sm font-medium">⚠️ You are already registered with a beneficiary</p>
+          </div>
+        )}
+
+        {isSelfRegistration && !isAlreadyRegistered && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-center">
+            <p className="text-red-400 text-sm font-medium">✗ You cannot set yourself as your own beneficiary</p>
           </div>
         )}
         <div>
