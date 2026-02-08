@@ -22,26 +22,40 @@ const HEARTBEAT_TYPES = {
   ],
 } as const;
 
+const PERIOD_OPTIONS = [
+  { label: '1 Minute (Test)', value: 60 },
+  { label: '3 Days', value: 259200 },
+  { label: '7 Days', value: 604800 },
+  { label: '15 Days', value: 1296000 },
+  { label: '30 Days', value: 2592000 },
+  { label: '3 Months', value: 7776000 },
+  { label: '6 Months', value: 15552000 },
+  { label: '1 Year', value: 31536000 },
+];
+
 export function HeartbeatPanel() {
   const { address } = useAccount();
-  const [autoPing, setAutoPing] = useState(false);
   const [lastPing, setLastPing] = useState<Date | null>(null);
   const [isPinging, setIsPinging] = useState(false);
   const [heartbeatStatus, setHeartbeatStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [heartbeatError, setHeartbeatError] = useState('');
 
-  // Beneficiary Management State
+  // Settings state
   const [newBeneficiaryInput, setNewBeneficiaryInput] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUpdatingBen, setIsUpdatingBen] = useState(false);
+  const [isUpdatingPeriod, setIsUpdatingPeriod] = useState(false);
 
-  // Read current beneficiary
-  const { data: currentBeneficiary, refetch: refetchInfo } = useReadContract({
+  // Read user info (to get current period and beneficiary)
+  const { data: userInfo, refetch: refetchInfo } = useReadContract({
     address: CONTRACTS.lazarusSource,
     abi: LazarusSourceABI,
-    functionName: 'beneficiaries',
+    functionName: 'getUserInfo',
     args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
+
+  const currentBeneficiary = userInfo?.[1];
+  const currentPeriod = Number(userInfo?.[3] || 604800);
 
   // ENS resolution for updates
   const isENSAttempt = newBeneficiaryInput.includes('.') && !newBeneficiaryInput.startsWith('0x');
@@ -57,19 +71,20 @@ export function HeartbeatPanel() {
 
   const resolvedAddress = isENSAttempt ? ensAddress : (newBeneficiaryInput.startsWith('0x') ? newBeneficiaryInput as `0x${string}` : undefined);
 
-  // Update Beneficiary
-  const { writeContract, data: updateHash, isPending: isUpdatePending, error: updateError } = useWriteContract();
-  const { isLoading: isUpdateConfirming, isSuccess: isUpdateSuccess } = useWaitForTransactionReceipt({
-    hash: updateHash,
+  // Update Beneficiary & Period
+  const { writeContract, data: txHash, isPending: isTxPending, error: writeError } = useWriteContract();
+  const { isLoading: isTxConfirming, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
   });
 
   useEffect(() => {
-    if (isUpdateSuccess) {
+    if (isTxSuccess) {
       refetchInfo();
-      setIsUpdating(false);
+      setIsUpdatingBen(false);
+      setIsUpdatingPeriod(false);
       setNewBeneficiaryInput('');
     }
-  }, [isUpdateSuccess, refetchInfo]);
+  }, [isTxSuccess, refetchInfo]);
 
   const { signTypedDataAsync } = useSignTypedData();
 
@@ -126,14 +141,6 @@ export function HeartbeatPanel() {
     }
   }, [address, signTypedDataAsync]);
 
-  // Auto-ping effect
-  useEffect(() => {
-    if (!autoPing || !address) return;
-    sendHeartbeat();
-    const interval = setInterval(sendHeartbeat, 60 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [autoPing, address, sendHeartbeat]);
-
   const handleUpdateBeneficiary = () => {
     if (!resolvedAddress) return;
     writeContract({
@@ -141,6 +148,15 @@ export function HeartbeatPanel() {
       abi: LazarusSourceABI,
       functionName: 'updateBeneficiary',
       args: [resolvedAddress],
+    });
+  };
+
+  const handleUpdateInactivityPeriod = (newPeriod: number) => {
+    writeContract({
+      address: CONTRACTS.lazarusSource,
+      abi: LazarusSourceABI,
+      functionName: 'updateInactivityPeriod',
+      args: [BigInt(newPeriod)],
     });
   };
 
@@ -164,23 +180,14 @@ export function HeartbeatPanel() {
           <button
             onClick={sendHeartbeat}
             disabled={isPinging}
-            className="w-full py-4 px-6 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 flex items-center justify-center gap-3"
+            className="w-full py-4 px-6 bg-gradient-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 flex items-center justify-center gap-3"
           >
             {isPinging ? 'Sending...' : '💓 Send Heartbeat'}
           </button>
 
-          <div className="flex items-center justify-between p-4 bg-slate-950/50 rounded-xl border border-slate-700">
-            <div>
-              <p className="text-white font-medium text-sm">Auto-Ping</p>
-              <p className="text-slate-400 text-xs">Ping every hour via Watchtower</p>
-            </div>
-            <button
-              onClick={() => setAutoPing(!autoPing)}
-              className={`w-12 h-6 rounded-full transition-all ${autoPing ? 'bg-emerald-500' : 'bg-slate-700'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white transform transition-transform ${autoPing ? 'translate-x-7' : 'translate-x-1'}`} />
-            </button>
-          </div>
+          <p className="text-slate-500 text-xs text-center px-4 italic">
+            Your heartbeat is sent to the off-chain Watchtower.
+          </p>
 
           {heartbeatStatus === 'success' && (
             <p className="text-emerald-400 text-sm text-center">✅ Heartbeat sent successfully!</p>
@@ -191,64 +198,76 @@ export function HeartbeatPanel() {
         </div>
       </div>
 
-      {/* Manage Beneficiary Card */}
+      {/* Settings Card */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 border border-violet-500/20 shadow-2xl shadow-violet-500/10">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Manage Beneficiary</h2>
-            <p className="text-slate-400 text-sm">Current recipient of your assets</p>
+            <h2 className="text-xl font-bold text-white">Settings</h2>
+            <p className="text-slate-400 text-sm">Manage your beneficiary and cooldown</p>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Beneficiary Setting */}
           <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
-            <p className="text-slate-500 text-xs mb-1">Active Beneficiary</p>
-            <p className="text-white font-mono break-all text-sm">{currentBeneficiary as string}</p>
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-slate-500 text-xs">Active Beneficiary</p>
+              {!isUpdatingBen && (
+                <button onClick={() => setIsUpdatingBen(true)} className="text-xs text-violet-400 hover:text-violet-300">Change</button>
+              )}
+            </div>
+            {!isUpdatingBen ? (
+              <p className="text-white font-mono break-all text-sm">{currentBeneficiary as string}</p>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={newBeneficiaryInput}
+                  onChange={(e) => setNewBeneficiaryInput(e.target.value)}
+                  placeholder="New address or .eth"
+                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-violet-500 outline-none"
+                />
+                <div className="flex gap-2">
+                  <button onClick={handleUpdateBeneficiary} className="flex-1 py-2 bg-violet-600 text-white rounded-lg text-xs font-semibold">Confirm</button>
+                  <button onClick={() => setIsUpdatingBen(false)} className="px-3 py-2 border border-slate-700 text-slate-400 rounded-lg text-xs">Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {updateError && (
-            <p className="text-red-400 text-xs">Error: {updateError.message}</p>
-          )}
-
-          {!isUpdating ? (
-            <button
-              onClick={() => setIsUpdating(true)}
-              className="w-full py-2 text-violet-400 hover:text-violet-300 text-sm font-medium transition-colors"
-            >
-              Change Beneficiary
-            </button>
-          ) : (
-            <div className="space-y-3 pt-2">
-              <input
-                type="text"
-                value={newBeneficiaryInput}
-                onChange={(e) => setNewBeneficiaryInput(e.target.value)}
-                placeholder="New address or .eth"
-                className="w-full px-4 py-2 bg-slate-950/50 border border-slate-700 rounded-lg text-white text-sm focus:border-violet-500"
-              />
-              {isEnsLoading && <p className="text-violet-400 text-xs">Resolving ENS...</p>}
-              <div className="flex gap-2">
-                <button
-                  onClick={handleUpdateBeneficiary}
-                  disabled={!resolvedAddress || isUpdatePending || isUpdateConfirming}
-                  className="flex-1 py-3 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-all"
-                >
-                  {isUpdatePending || isUpdateConfirming ? 'Updating...' : 'Update'}
-                </button>
-                <button
-                  onClick={() => setIsUpdating(false)}
-                  className="px-4 py-3 border border-slate-700 hover:bg-slate-800 text-slate-400 rounded-lg text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
+          {/* Cooldown Setting */}
+          <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
+            <div className="flex justify-between items-start mb-2">
+              <p className="text-slate-500 text-xs">Inactivity Cooldown</p>
+              {!isUpdatingPeriod && (
+                <button onClick={() => setIsUpdatingPeriod(true)} className="text-xs text-violet-400 hover:text-violet-300">Change</button>
+              )}
             </div>
-          )}
+            {!isUpdatingPeriod ? (
+              <p className="text-white font-bold">{PERIOD_OPTIONS.find(o => o.value === currentPeriod)?.label || `${currentPeriod}s`}</p>
+            ) : (
+              <div className="space-y-3">
+                <select
+                  value={currentPeriod}
+                  onChange={(e) => handleUpdateInactivityPeriod(Number(e.target.value))}
+                  className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-violet-500 outline-none"
+                >
+                  {PERIOD_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <button onClick={() => setIsUpdatingPeriod(false)} className="w-full py-2 border border-slate-700 text-slate-400 rounded-lg text-xs">Done</button>
+              </div>
+            )}
+          </div>
+          
+          {writeError && <p className="text-red-400 text-xs mt-2">{writeError.message}</p>}
         </div>
       </div>
     </div>

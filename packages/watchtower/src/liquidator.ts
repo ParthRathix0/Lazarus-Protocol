@@ -3,7 +3,7 @@ import { getHeartbeatStore } from './database.js';
 import { buildMockSwapData, getWethToUsdcRoute, validateQuote } from './lifi.js';
 import { Config, LazarusSourceABI, ERC20ABI } from './config.js';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const FALLBACK_INACTIVITY_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface LiquidationResult {
   userAddress: Address;
@@ -231,8 +231,8 @@ export async function runLiquidationCheck(
   const store = getHeartbeatStore();
   const results: LiquidationResult[] = [];
 
-  // Get users who haven't pinged in 7 days
-  const inactiveUsers = store.getInactiveUsers(SEVEN_DAYS_MS);
+  // Get all users who are inactive based on their OWN custom period
+  const inactiveUsers = store.getInactiveUsers();
 
   console.log(`Found ${inactiveUsers.length} potentially inactive users`);
 

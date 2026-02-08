@@ -3,7 +3,7 @@
 import { useAccount, useReadContract, useReadContracts } from 'wagmi';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI, ERC20ABI } from '@/config/abis';
-import { formatEther, formatUnits } from 'viem';
+import { formatEther } from 'viem';
 
 export function StatusDashboard() {
   const { address } = useAccount();
@@ -64,15 +64,20 @@ export function StatusDashboard() {
     );
   }
 
-  const [registered, beneficiary, lastPing, isDead] = userInfo || [false, '0x', BigInt(0), false];
+  // userInfo: [bool registered, address beneficiary, uint256 lastPing, uint256 inactivityPeriod, bool dead]
+  const [registered, beneficiary, lastPing, inactivityPeriod, isDead] = userInfo || [false, '0x', BigInt(0), BigInt(604800), false];
   const [, timeRemaining] = userStatus || [false, BigInt(0)];
   
   const wethBalance = tokenData?.[0]?.result ?? BigInt(0);
   const wethAllowance = tokenData?.[1]?.result ?? BigInt(0);
 
   const lastPingDate = lastPing ? new Date(Number(lastPing) * 1000) : null;
-  const timeRemainingDays = timeRemaining ? Number(timeRemaining) / 86400 : 0;
-  const timeRemainingHours = timeRemaining ? (Number(timeRemaining) % 86400) / 3600 : 0;
+  const timeRemainingSeconds = Number(timeRemaining);
+  const timeRemainingDays = timeRemainingSeconds / 86400;
+  const timeRemainingHours = (timeRemainingSeconds % 86400) / 3600;
+  const timeRemainingMinutes = (timeRemainingSeconds % 3600) / 60;
+
+  const totalPeriod = Number(inactivityPeriod);
 
   if (isUserLoading) {
     return (
@@ -135,23 +140,35 @@ export function StatusDashboard() {
             <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
               <p className="text-slate-400 text-sm mb-1">Time Until Liquidation</p>
               <p className="text-2xl font-bold text-white">
-                {Math.floor(timeRemainingDays)}d {Math.floor(timeRemainingHours)}h
+                {timeRemainingSeconds >= 3600 ? (
+                  `${Math.floor(timeRemainingDays)}d ${Math.floor(timeRemainingHours)}h`
+                ) : (
+                  `${Math.floor(timeRemainingMinutes)}m ${timeRemainingSeconds % 60}s`
+                )}
               </p>
               <div className="mt-2 h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div 
                   className={`h-full rounded-full transition-all ${
-                    timeRemainingDays > 5 ? 'bg-emerald-500' : 
-                    timeRemainingDays > 2 ? 'bg-amber-500' : 'bg-red-500'
+                    (timeRemainingSeconds / totalPeriod) > 0.7 ? 'bg-emerald-500' : 
+                    (timeRemainingSeconds / totalPeriod) > 0.3 ? 'bg-amber-500' : 'bg-red-500'
                   }`}
-                  style={{ width: `${Math.min(100, (timeRemainingDays / 7) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (timeRemainingSeconds / totalPeriod) * 100)}%` }}
                 />
               </div>
+            </div>
+
+            {/* Inactivity Period */}
+            <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
+              <p className="text-slate-400 text-sm mb-1">Cooldown Duration</p>
+              <p className="text-lg font-bold text-white">
+                {totalPeriod >= 86400 ? `${totalPeriod / 86400} Days` : totalPeriod >= 3600 ? `${totalPeriod / 3600} Hours` : `${totalPeriod / 60} Minutes`}
+              </p>
             </div>
 
             {/* Last Heartbeat */}
             <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
               <p className="text-slate-400 text-sm mb-1">Last Heartbeat</p>
-              <p className="text-lg font-bold text-white">
+              <p className="text-md font-bold text-white">
                 {lastPingDate?.toLocaleDateString()} {lastPingDate?.toLocaleTimeString()}
               </p>
             </div>
@@ -159,19 +176,19 @@ export function StatusDashboard() {
             {/* Beneficiary */}
             <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
               <p className="text-slate-400 text-sm mb-1">Beneficiary</p>
-              <p className="text-lg font-mono text-white">
+              <p className="text-md font-mono text-white">
                 {beneficiary ? `${String(beneficiary).slice(0, 6)}...${String(beneficiary).slice(-4)}` : 'N/A'}
               </p>
             </div>
 
             {/* Protected Assets */}
-            <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700">
+            <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-700 md:col-span-2">
               <p className="text-slate-400 text-sm mb-1">Protected WETH</p>
               <p className="text-lg font-bold text-white">
                 {parseFloat(formatEther(wethAllowance)).toFixed(4)} WETH
               </p>
               <p className="text-slate-500 text-xs">
-                Balance: {parseFloat(formatEther(wethBalance)).toFixed(4)} WETH
+                Wallet Balance: {parseFloat(formatEther(wethBalance)).toFixed(4)} WETH
               </p>
             </div>
           </div>

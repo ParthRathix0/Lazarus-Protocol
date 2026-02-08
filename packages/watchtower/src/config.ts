@@ -29,6 +29,7 @@ export const LazarusSourceABI = [
       { name: 'registered', type: 'bool' },
       { name: 'beneficiary', type: 'address' },
       { name: 'lastPing', type: 'uint256' },
+      { name: 'inactivityPeriod', type: 'uint256' },
       { name: 'dead', type: 'bool' },
     ],
     stateMutability: 'view',
@@ -61,6 +62,26 @@ export const LazarusSourceABI = [
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
     type: 'function',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'user', type: 'address' },
+      { indexed: true, name: 'beneficiary', type: 'address' },
+      { indexed: false, name: 'inactivityPeriod', type: 'uint256' },
+    ],
+    name: 'Registered',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'user', type: 'address' },
+      { indexed: false, name: 'oldPeriod', type: 'uint256' },
+      { indexed: false, name: 'newPeriod', type: 'uint256' },
+    ],
+    name: 'InactivityPeriodUpdated',
+    type: 'event',
   },
 ] as const;
 

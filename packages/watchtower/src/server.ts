@@ -26,9 +26,6 @@ const config = loadConfig();
 const { publicClient, walletClient } = createClients(config);
 const store = getHeartbeatStore();
 
-// Track pending on-chain updates to prevent race conditions and gas waste
-const pendingUpdates = new Set<string>();
-
 // Create Express app
 const app = express();
 
@@ -92,69 +89,28 @@ app.post('/heartbeat', async (req, res) => {
       });
     }
 
-    // CRITICAL: Update the on-chain heartbeat via pingFor
-    // This ensures the contract's lastHeartbeat is updated if last update >24hrs ago
-    try {
-      const [registered, , lastPing, dead] = await publicClient.readContract({
-        address: config.lazarusSourceAddress,
-        abi: LazarusSourceABI,
-        functionName: 'getUserInfo',
-        args: [address as Address],
-      });
-
-      if (registered && !dead) {
-        const lastPingSeconds = Number(lastPing);
-        const nowSeconds = Math.floor(Date.now() / 1000);
-        const twentyFourHours = 24 * 60 * 60;
-
-        // Only send tx if the on-chain timestamp is older than 24 hours
-        if (nowSeconds - lastPingSeconds > twentyFourHours) {
-          // Check if there's already a pending transaction for this user
-          const userAddr = (address as string).toLowerCase();
-          if (pendingUpdates.has(userAddr)) {
-            console.log(`[On-Chain] Skipping ${address} - transaction already in flight`);
-          } else {
-            console.log(`[On-Chain] Last ping was ${nowSeconds - lastPingSeconds}s ago. Sending update...`);
-            
-            // Mark as pending before sending
-            pendingUpdates.add(userAddr);
-            
-            try {
-              const hash = await walletClient.writeContract({
-                address: config.lazarusSourceAddress,
-                abi: LazarusSourceABI,
-                functionName: 'pingFor',
-                args: [address as Address],
-                chain: walletClient.chain,
-                account: walletClient.account!,
-              });
-
-              console.log(`[On-Chain] Ping tx sent for ${address}: ${hash}`);
-              
-              // Wait for receipt in background and clean up pendingUpdates
-              publicClient.waitForTransactionReceipt({ hash })
-                .then(() => pendingUpdates.delete(userAddr))
-                .catch((err) => {
-                  console.error(`[On-Chain] Tx failed for ${address}:`, err);
-                  pendingUpdates.delete(userAddr);
-                });
-            } catch (txError) {
-              // Clean up on error
-              pendingUpdates.delete(userAddr);
-              throw txError;
-            }
-          }
-        } else {
-          console.log(`[On-Chain] Skipped update for ${address} (Synced < 24h ago)`);
-        }
+    // Record the heartbeat in local database
+    // We fetch the inactivity period from the record or chain if not provided
+    let inactivityPeriod = 604800; // Default 7 days
+    const existingRecord = store.getHeartbeat(address);
+    if (existingRecord) {
+      inactivityPeriod = existingRecord.inactivityPeriod;
+    } else {
+      // Fetch from chain once if new user
+      try {
+        const [, , , period] = await publicClient.readContract({
+          address: config.lazarusSourceAddress,
+          abi: LazarusSourceABI,
+          functionName: 'getUserInfo',
+          args: [address as Address],
+        });
+        inactivityPeriod = Number(period);
+      } catch (e) {
+        console.warn(`Could not fetch period for ${address}, using default`);
       }
-    } catch (chainError) {
-      // Don't fail the request if chain read fails, just log it
-      console.warn(`[On-Chain] Failed to check/update status for ${address}:`, chainError);
     }
 
-    // Record the heartbeat in local database
-    const record = store.recordHeartbeat(address, signature);
+    const record = store.recordHeartbeat(address, signature, inactivityPeriod);
 
     console.log(`[${new Date().toISOString()}] Heartbeat recorded for ${address}`);
 
@@ -194,19 +150,19 @@ app.get('/status/:address', (req, res) => {
   }
 
   const now = Date.now();
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-  const deadline = record.lastSeen + sevenDaysMs;
+  const deadline = record.lastSeen + (record.inactivityPeriod * 1000);
   const timeRemaining = Math.max(0, deadline - now);
 
   return res.json({
     address: record.userAddress,
     lastSeen: record.lastSeen,
     lastSeenISO: new Date(record.lastSeen).toISOString(),
+    inactivityPeriod: record.inactivityPeriod,
     deadline,
     deadlineISO: new Date(deadline).toISOString(),
     timeRemainingMs: timeRemaining,
     timeRemainingDays: timeRemaining / (24 * 60 * 60 * 1000),
-    isAtRisk: timeRemaining < 24 * 60 * 60 * 1000, // Less than 1 day
+    isAtRisk: timeRemaining < (record.inactivityPeriod * 1000) / 3, // At risk if less than 1/3 time left
   });
 });
 
@@ -262,6 +218,48 @@ app.listen(PORT, () => {
   console.log(`🗼 Watchtower server running on port ${PORT}`);
   console.log(`📡 Listening for heartbeats...`);
   console.log(`⏰ Liquidation checks scheduled every hour`);
+
+  // Start watching for events
+  console.log(`👀 Watching for Registered and InactivityPeriodUpdated events...`);
+  
+  publicClient.watchContractEvent({
+    address: config.lazarusSourceAddress,
+    abi: LazarusSourceABI,
+    eventName: 'Registered',
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const { user, beneficiary, inactivityPeriod } = log.args;
+        if (user && inactivityPeriod) {
+          console.log(`[Event] User ${user} registered with period ${inactivityPeriod}s`);
+          // Note: we don't have a signature yet, so we use a dummy one or wait for first heartbeat
+          // Better: just ensure recordHeartbeat is called eventually.
+          // For now, if user is new, we record a "zero" heartbeat just to start tracking
+          const existing = store.getHeartbeat(user);
+          if (!existing) {
+            store.recordHeartbeat(user, '0x-pending-first-heartbeat', Number(inactivityPeriod));
+          }
+        }
+      }
+    }
+  });
+
+  publicClient.watchContractEvent({
+    address: config.lazarusSourceAddress,
+    abi: LazarusSourceABI,
+    eventName: 'InactivityPeriodUpdated',
+    onLogs: (logs) => {
+      for (const log of logs) {
+        const { user, newPeriod } = log.args;
+        if (user && newPeriod) {
+          console.log(`[Event] User ${user} updated period to ${newPeriod}s`);
+          const existing = store.getHeartbeat(user);
+          if (existing) {
+            store.recordHeartbeat(user, existing.signature, Number(newPeriod));
+          }
+        }
+      }
+    }
+  });
 });
 
 // Graceful shutdown

@@ -16,9 +16,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
                                  CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Time period after which a user is considered "dead" (7 days)
-    uint256 public constant DEAD_MAN_TIMEOUT = 7 days;
-
+    /// @notice Fee taken by watchtower for gas reimbursement (1% = 100 BPS)
     /// @notice Fee taken by watchtower for gas reimbursement (1% = 100 BPS)
     uint256 public constant LIQUIDATION_FEE_BPS = 100;
 
@@ -41,6 +39,9 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     /// @notice Mapping of user address to their last heartbeat timestamp
     mapping(address => uint256) public lastHeartbeat;
 
+    /// @notice Mapping of user address to their custom inactivity timeout
+    mapping(address => uint256) public inactivityPeriods;
+
     /// @notice Mapping of user address to their "dead" status
     mapping(address => bool) public isDead;
 
@@ -55,10 +56,13 @@ contract LazarusSource is Ownable, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Emitted when a user registers their dead man's switch
-    event Registered(address indexed user, address indexed beneficiary);
+    event Registered(address indexed user, address indexed beneficiary, uint256 inactivityPeriod);
 
     /// @notice Emitted when a user updates their beneficiary
     event BeneficiaryUpdated(address indexed user, address indexed oldBeneficiary, address indexed newBeneficiary);
+
+    /// @notice Emitted when a user updates their inactivity period
+    event InactivityPeriodUpdated(address indexed user, uint256 oldPeriod, uint256 newPeriod);
 
     /// @notice Emitted when a user pings (heartbeat)
     event Ping(address indexed user, uint256 timestamp);
@@ -134,17 +138,33 @@ contract LazarusSource is Ownable, ReentrancyGuard {
 
     /// @notice Register for the Dead Man's Switch
     /// @param _beneficiary The address that will receive funds if user goes inactive
-    function register(address _beneficiary) external {
+    /// @param _inactivityPeriod The custom time period (in seconds) after which user is considered dead
+    function register(address _beneficiary, uint256 _inactivityPeriod) external {
         if (_beneficiary == address(0)) revert InvalidBeneficiary();
         if (_beneficiary == msg.sender) revert InvalidBeneficiary();
+        if (_inactivityPeriod < 60) revert ZeroAmount(); // Min 1 minute
         if (isRegistered[msg.sender]) revert AlreadyRegistered();
 
         beneficiaries[msg.sender] = _beneficiary;
+        inactivityPeriods[msg.sender] = _inactivityPeriod;
         lastHeartbeat[msg.sender] = block.timestamp;
         isRegistered[msg.sender] = true;
 
-        emit Registered(msg.sender, _beneficiary);
+        emit Registered(msg.sender, _beneficiary, _inactivityPeriod);
         emit Ping(msg.sender, block.timestamp);
+    }
+
+    /// @notice Update the inactivity period
+    /// @param _newPeriod The new custom time period (in seconds)
+    function updateInactivityPeriod(uint256 _newPeriod) external {
+        if (!isRegistered[msg.sender]) revert NotRegistered();
+        if (isDead[msg.sender]) revert AlreadyDead();
+        if (_newPeriod < 60) revert ZeroAmount();
+
+        uint256 oldPeriod = inactivityPeriods[msg.sender];
+        inactivityPeriods[msg.sender] = _newPeriod;
+
+        emit InactivityPeriodUpdated(msg.sender, oldPeriod, _newPeriod);
     }
 
     /// @notice Update the beneficiary address
@@ -246,7 +266,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
         if (_token == address(0)) revert InvalidToken();
         
         // Check if user has passed the timeout
-        if (block.timestamp <= lastHeartbeat[_user] + DEAD_MAN_TIMEOUT) {
+        if (block.timestamp <= lastHeartbeat[_user] + inactivityPeriods[_user]) {
             revert NotDeadYet();
         }
 
@@ -365,7 +385,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             return (false, 0);
         }
 
-        uint256 deadline = lastHeartbeat[_user] + DEAD_MAN_TIMEOUT;
+        uint256 deadline = lastHeartbeat[_user] + inactivityPeriods[_user];
         
         if (block.timestamp > deadline) {
             return (true, 0);
@@ -383,6 +403,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             bool registered,
             address beneficiary,
             uint256 lastPing,
+            uint256 inactivityPeriod,
             bool dead
         ) 
     {
@@ -390,6 +411,7 @@ contract LazarusSource is Ownable, ReentrancyGuard {
             isRegistered[_user],
             beneficiaries[_user],
             lastHeartbeat[_user],
+            inactivityPeriods[_user],
             isDead[_user]
         );
     }

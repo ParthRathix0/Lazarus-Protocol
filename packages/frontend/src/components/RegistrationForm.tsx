@@ -2,11 +2,21 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useEnsAddress, useChainId, useReadContract } from 'wagmi';
-import { isAddress } from 'viem';
 import { mainnet, sepolia } from 'wagmi/chains';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
+
+const PERIOD_OPTIONS = [
+  { label: '1 Minute (Test)', value: 60 },
+  { label: '3 Days', value: 259200 },
+  { label: '7 Days', value: 604800 },
+  { label: '15 Days', value: 1296000 },
+  { label: '30 Days', value: 2592000 },
+  { label: '3 Months', value: 7776000 },
+  { label: '6 Months', value: 15552000 },
+  { label: '1 Year', value: 31536000 },
+];
 
 // Helper to safely normalize ENS names (avoid crash on partial input like "grandma.")
 function safeNormalize(name: string): string | undefined {
@@ -43,6 +53,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const [beneficiaryInput, setBeneficiaryInput] = useState('');
+  const [inactivityPeriod, setInactivityPeriod] = useState(604800); // 7 days in seconds
 
   const isWrongChain = isConnected && chainId !== sepolia.id;
 
@@ -156,7 +167,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
       address: CONTRACTS.lazarusSource,
       abi: LazarusSourceABI,
       functionName: 'register',
-      args: [resolvedAddress],
+      args: [resolvedAddress, BigInt(inactivityPeriod)],
     });
   };
 
@@ -177,12 +188,6 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
           <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
-        </div>
-        <div className="flex justify-between text-xs text-slate-500 mb-2 px-1">
-          <span>Your Address: {address?.slice(0, 6)}...{address?.slice(-4)}</span>
-          {resolvedAddress && (
-            <span>Target: {resolvedAddress?.slice(0, 6)}...{resolvedAddress?.slice(-4)}</span>
-          )}
         </div>
         <div>
           <h2 className="text-xl font-bold text-white">Register Beneficiary</h2>
@@ -217,7 +222,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
             value={beneficiaryInput}
             onChange={(e) => setBeneficiaryInput(e.target.value)}
             placeholder="0x... or vitalik.eth"
-            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
+            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all outline-none"
           />
           
           {validationUI && (
@@ -237,6 +242,26 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
               </span>
             </div>
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            Inactivity Period (Cooldown)
+          </label>
+          <select
+            value={inactivityPeriod}
+            onChange={(e) => setInactivityPeriod(Number(e.target.value))}
+            className="w-full px-4 py-3 bg-slate-950/50 border border-slate-700 rounded-xl text-white focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all appearance-none cursor-pointer outline-none"
+          >
+            {PERIOD_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value} className="bg-slate-900">
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">
+            If you don&apos;t heartbeat within this time, your switch will trigger.
+          </p>
         </div>
 
         {writeError && (
@@ -273,7 +298,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
         <button
           onClick={handleRegister}
           disabled={!canRegister}
-          className="w-full py-4 px-6 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40"
+          className="w-full py-4 px-6 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-slate-700 disabled:to-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 mt-4"
         >
           {isPending ? 'Confirming in Wallet...' : isConfirming ? 'Processing...' : 'Register Beneficiary'}
         </button>
@@ -281,4 +306,3 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
     </div>
   );
 }
-

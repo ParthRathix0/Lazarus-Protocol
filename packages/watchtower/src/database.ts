@@ -9,6 +9,7 @@ export interface HeartbeatRecord {
   userAddress: string;
   lastSeen: number;
   signature: string;
+  inactivityPeriod: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -28,6 +29,7 @@ export class HeartbeatStore {
         user_address TEXT PRIMARY KEY,
         last_seen INTEGER NOT NULL,
         signature TEXT NOT NULL,
+        inactivity_period INTEGER NOT NULL DEFAULT 604800,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -42,25 +44,27 @@ export class HeartbeatStore {
   /**
    * Record a heartbeat for a user
    */
-  recordHeartbeat(userAddress: string, signature: string): HeartbeatRecord {
+  recordHeartbeat(userAddress: string, signature: string, inactivityPeriod: number): HeartbeatRecord {
     const now = Date.now();
     const normalizedAddress = userAddress.toLowerCase();
 
     const stmt = this.db.prepare(`
-      INSERT INTO heartbeats (user_address, last_seen, signature, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO heartbeats (user_address, last_seen, signature, inactivity_period, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_address) DO UPDATE SET
         last_seen = excluded.last_seen,
         signature = excluded.signature,
+        inactivity_period = excluded.inactivity_period,
         updated_at = excluded.updated_at
     `);
 
-    stmt.run(normalizedAddress, now, signature, now, now);
+    stmt.run(normalizedAddress, now, signature, inactivityPeriod, now, now);
 
     return {
       userAddress: normalizedAddress,
       lastSeen: now,
       signature,
+      inactivityPeriod,
       createdAt: now,
       updatedAt: now,
     };
@@ -71,7 +75,7 @@ export class HeartbeatStore {
    */
   getHeartbeat(userAddress: string): HeartbeatRecord | null {
     const stmt = this.db.prepare(`
-      SELECT user_address, last_seen, signature, created_at, updated_at
+      SELECT user_address, last_seen, signature, inactivity_period, created_at, updated_at
       FROM heartbeats
       WHERE user_address = ?
     `);
@@ -80,6 +84,7 @@ export class HeartbeatStore {
       user_address: string;
       last_seen: number;
       signature: string;
+      inactivity_period: number;
       created_at: number;
       updated_at: number;
     } | undefined;
@@ -90,27 +95,30 @@ export class HeartbeatStore {
       userAddress: row.user_address,
       lastSeen: row.last_seen,
       signature: row.signature,
+      inactivityPeriod: row.inactivity_period,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
   }
 
   /**
-   * Get all users who haven't pinged in the specified duration (in ms)
+   * Get all users who haven't pinged in their specified duration (in ms)
    */
-  getInactiveUsers(inactiveDurationMs: number): HeartbeatRecord[] {
-    const cutoff = Date.now() - inactiveDurationMs;
+  getInactiveUsers(): HeartbeatRecord[] {
+    const now = Date.now();
 
+    // Select users where now - last_seen > inactivity_period (converted to ms)
     const stmt = this.db.prepare(`
-      SELECT user_address, last_seen, signature, created_at, updated_at
+      SELECT user_address, last_seen, signature, inactivity_period, created_at, updated_at
       FROM heartbeats
-      WHERE last_seen < ?
+      WHERE ? - last_seen > (inactivity_period * 1000)
     `);
 
-    const rows = stmt.all(cutoff) as Array<{
+    const rows = stmt.all(now) as Array<{
       user_address: string;
       last_seen: number;
       signature: string;
+      inactivity_period: number;
       created_at: number;
       updated_at: number;
     }>;
@@ -119,6 +127,7 @@ export class HeartbeatStore {
       userAddress: row.user_address,
       lastSeen: row.last_seen,
       signature: row.signature,
+      inactivityPeriod: row.inactivity_period,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -139,7 +148,7 @@ export class HeartbeatStore {
    */
   getAllUsers(): HeartbeatRecord[] {
     const stmt = this.db.prepare(`
-      SELECT user_address, last_seen, signature, created_at, updated_at
+      SELECT user_address, last_seen, signature, inactivity_period, created_at, updated_at
       FROM heartbeats
     `);
 
@@ -147,6 +156,7 @@ export class HeartbeatStore {
       user_address: string;
       last_seen: number;
       signature: string;
+      inactivity_period: number;
       created_at: number;
       updated_at: number;
     }>;
@@ -155,6 +165,7 @@ export class HeartbeatStore {
       userAddress: row.user_address,
       lastSeen: row.last_seen,
       signature: row.signature,
+      inactivityPeriod: row.inactivity_period,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));

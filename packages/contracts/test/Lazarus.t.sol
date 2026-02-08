@@ -68,47 +68,48 @@ contract LazarusTest is Test {
 
     function test_Register_Success() public {
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
 
-        (bool registered, address ben, uint256 lastPing, bool dead) = 
+        (bool registered, address ben, uint256 lastPing, uint256 period, bool dead) = 
             lazarusSource.getUserInfo(user);
         
         assertEq(registered, true, "Should be registered");
         assertEq(ben, beneficiary, "Beneficiary should match");
         assertEq(lastPing, block.timestamp, "Last ping should be current timestamp");
+        assertEq(period, DEAD_MAN_TIMEOUT, "Period should match");
         assertEq(dead, false, "Should not be dead");
     }
 
     function test_Register_EmitEvents() public {
-        vm.expectEmit(true, true, false, false);
-        emit LazarusSource.Registered(user, beneficiary);
+        vm.expectEmit(true, true, false, true);
+        emit LazarusSource.Registered(user, beneficiary, DEAD_MAN_TIMEOUT);
         
         vm.expectEmit(true, false, false, true);
         emit LazarusSource.Ping(user, block.timestamp);
         
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
     }
 
     function test_Register_RevertIfAlreadyRegistered() public {
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         vm.prank(user);
         vm.expectRevert(LazarusSource.AlreadyRegistered.selector);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
     }
 
     function test_Register_RevertIfBeneficiaryIsZero() public {
         vm.prank(user);
         vm.expectRevert(LazarusSource.InvalidBeneficiary.selector);
-        lazarusSource.register(address(0));
+        lazarusSource.register(address(0), DEAD_MAN_TIMEOUT);
     }
 
     function test_Register_RevertIfBeneficiaryIsSelf() public {
         vm.prank(user);
         vm.expectRevert(LazarusSource.InvalidBeneficiary.selector);
-        lazarusSource.register(user);
+        lazarusSource.register(user, DEAD_MAN_TIMEOUT);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -118,7 +119,7 @@ contract LazarusTest is Test {
     function test_Ping_Success() public {
         // Register first
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         // Advance time
         uint256 newTime = block.timestamp + 1 days;
@@ -128,7 +129,7 @@ contract LazarusTest is Test {
         vm.prank(user);
         lazarusSource.ping();
         
-        (, , uint256 lastPing, ) = lazarusSource.getUserInfo(user);
+        (, , uint256 lastPing, ,) = lazarusSource.getUserInfo(user);
         assertEq(lastPing, newTime, "Last ping should be updated");
     }
 
@@ -166,7 +167,7 @@ contract LazarusTest is Test {
 
     function test_PingFor_ByWatchtower() public {
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         uint256 newTime = block.timestamp + 1 days;
         vm.warp(newTime);
@@ -174,13 +175,13 @@ contract LazarusTest is Test {
         vm.prank(watchtower);
         lazarusSource.pingFor(user);
         
-        (, , uint256 lastPing, ) = lazarusSource.getUserInfo(user);
+        (, , uint256 lastPing, ,) = lazarusSource.getUserInfo(user);
         assertEq(lastPing, newTime, "Last ping should be updated by watchtower");
     }
 
     function test_PingFor_RevertIfNotWatchtower() public {
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         vm.prank(randomUser);
         vm.expectRevert(LazarusSource.NotWatchtower.selector);
@@ -220,14 +221,14 @@ contract LazarusTest is Test {
         assertEq(balanceAfter, 0, "User balance should be zero after liquidation");
         
         // Check if user is marked dead
-        (, , , bool dead) = lazarusSource.getUserInfo(user);
+        (, , , , bool dead) = lazarusSource.getUserInfo(user);
         assertTrue(dead, "User should be marked dead");
     }
 
     function test_Liquidate_RevertIfNotPastTimeout() public {
         // Register user
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         // Approve tokens
         vm.prank(user);
@@ -264,7 +265,7 @@ contract LazarusTest is Test {
     function test_Liquidate_RevertIfNoAllowance() public {
         // Register without approving
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         // Warp past timeout
         vm.warp(block.timestamp + DEAD_MAN_TIMEOUT + 1);
@@ -310,7 +311,7 @@ contract LazarusTest is Test {
 
     function test_CheckUserStatus_NotYetDead() public {
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         // Advance 3 days
         vm.warp(block.timestamp + 3 days);
@@ -322,7 +323,7 @@ contract LazarusTest is Test {
 
     function test_CheckUserStatus_PastTimeout() public {
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         // Advance past timeout
         vm.warp(block.timestamp + DEAD_MAN_TIMEOUT + 1);
@@ -433,7 +434,7 @@ contract LazarusTest is Test {
     function _setupUserForLiquidation() internal {
         // Register user with beneficiary
         vm.prank(user);
-        lazarusSource.register(beneficiary);
+        lazarusSource.register(beneficiary, DEAD_MAN_TIMEOUT);
         
         // Approve tokens for Lazarus contract
         vm.prank(user);
