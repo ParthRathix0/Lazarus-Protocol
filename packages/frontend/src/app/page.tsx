@@ -4,7 +4,6 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract } from 'wagmi';
 import { RegistrationForm } from '@/components/RegistrationForm';
 import { HeartbeatPanel } from '@/components/HeartbeatPanel';
-import { StatusDashboard } from '@/components/StatusDashboard';
 import { TokenApproval } from '@/components/TokenApproval';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
@@ -97,11 +96,39 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="space-y-8">
-            {/* Status Dashboard */}
-            <StatusDashboard />
+          <div className="space-y-12">
+            {/* Info Section - Now at Top */}
+            <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-8">
+              <h3 className="text-lg font-semibold text-white mb-6">Execution Flow</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div className="text-center group">
+                  <div className="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto mb-3 group-hover:bg-violet-500/20 transition-colors">
+                    <span className="text-xl font-bold text-violet-400">1</span>
+                  </div>
+                  <p className="text-slate-300 text-xs font-medium">Register beneficiary address or ENS</p>
+                </div>
+                <div className="text-center group">
+                  <div className="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto mb-3 group-hover:bg-violet-500/20 transition-colors">
+                    <span className="text-xl font-bold text-violet-400">2</span>
+                  </div>
+                  <p className="text-slate-300 text-xs font-medium">Enable asset protection (Approval)</p>
+                </div>
+                <div className="text-center group">
+                  <div className="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto mb-3 group-hover:bg-violet-500/20 transition-colors">
+                    <span className="text-xl font-bold text-violet-400">3</span>
+                  </div>
+                  <p className="text-slate-300 text-xs font-medium">Sign periodic gas-free heartbeats</p>
+                </div>
+                <div className="text-center group">
+                  <div className="w-12 h-12 rounded-full bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto mb-3 group-hover:bg-violet-500/20 transition-colors">
+                    <span className="text-xl font-bold text-violet-400">4</span>
+                  </div>
+                  <p className="text-slate-300 text-xs font-medium">Autonomous evacuation on timeout</p>
+                </div>
+              </div>
+            </div>
 
-            {/* Main Panels */}
+            {/* Main Control Panels */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {isStatusLoading ? (
                 <div className="col-span-2 py-12 flex flex-col items-center justify-center bg-slate-900/50 border border-slate-800 rounded-2xl">
@@ -109,7 +136,7 @@ export default function Home() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <p className="text-slate-400">Verifying your protection status...</p>
+                  <p className="text-slate-400">Checking your protection status...</p>
                 </div>
               ) : !isRegistered ? (
                 <>
@@ -122,37 +149,6 @@ export default function Home() {
                   <TokenApproval />
                 </>
               )}
-            </div>
-
-            {/* Info Section */}
-            <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-8">
-              <h3 className="text-lg font-semibold text-white mb-4">How It Works</h3>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-xl font-bold text-violet-400">1</span>
-                  </div>
-                  <p className="text-slate-300 text-sm">Register with your beneficiary&apos;s address</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-xl font-bold text-violet-400">2</span>
-                  </div>
-                  <p className="text-slate-300 text-sm">Approve tokens for Lazarus to protect</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-xl font-bold text-violet-400">3</span>
-                  </div>
-                  <p className="text-slate-300 text-sm">Send heartbeats to prove you&apos;re alive</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-xl font-bold text-violet-400">4</span>
-                  </div>
-                  <p className="text-slate-300 text-sm">If silent for your custom period, assets go to beneficiary</p>
-                </div>
-              </div>
             </div>
           </div>
         )}

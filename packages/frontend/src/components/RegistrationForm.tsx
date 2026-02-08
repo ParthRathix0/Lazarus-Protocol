@@ -6,6 +6,7 @@ import { mainnet, sepolia } from 'wagmi/chains';
 import { CONTRACTS } from '@/config/wagmi';
 import { LazarusSourceABI } from '@/config/abis';
 import { normalize } from 'viem/ens';
+import { formatError } from '@/utils/error';
 
 const PERIOD_OPTIONS = [
   { label: '30 Seconds (Test)', value: 30 },
@@ -267,7 +268,7 @@ export function RegistrationForm({ onSuccess }: RegistrationFormProps) {
 
         {writeError && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <p className="text-red-400 text-sm">{writeError.message}</p>
+            <p className="text-red-400 text-sm">{formatError(writeError)}</p>
           </div>
         )}
 

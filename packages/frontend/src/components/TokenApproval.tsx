@@ -5,6 +5,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadCont
 import { parseEther, formatEther } from 'viem';
 import { CONTRACTS } from '@/config/wagmi';
 import { ERC20ABI } from '@/config/abis';
+import { formatError } from '@/utils/error';
 
 export function TokenApproval() {
   const { address } = useAccount();
@@ -114,7 +115,7 @@ export function TokenApproval() {
 
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-            <p className="text-red-400 text-sm">{error.message}</p>
+            <p className="text-red-400 text-sm">{formatError(error)}</p>
           </div>
         )}
 
