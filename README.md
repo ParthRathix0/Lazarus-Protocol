@@ -29,17 +29,18 @@ Lazarus Protocol provides a decentralized, cross-chain insurance policy for your
 
 Lazarus Protocol leverages several cutting-edge protocols to ensure a seamless and secure cross-chain experience:
 
-### 1. LI.FI (Cross-Chain Execution Layer)
+### 1. Yellow Network (Nitrolite Protocol)
+Lazarus Protocol implements "Gas-Free Heartbeats" using session-based logic inspired by the **Yellow SDK**.
+- **Integration Details**: [📖 YELLOW.md](./YELLOW.md)
+
+### 2. LI.FI (Cross-Chain Execution Layer)
 We use the **LI.FI API** for our core "Evacuation" logic. When a user is detected as inactive, the Watchtower fetches a swap-and-bridge quote from LI.FI to move assets (e.g., WETH) on Sepolia to USDC on Arbitrum Sepolia in a single atomic transaction.
-- **Integration Details**: [📖 SPONSOR_LIFI.md](./SPONSOR_LIFI.md)
+- **Integration Details**: [📖 LIFI.md](./LIFI.md)
 
 ### 2. ENS (Ethereum Name Service)
 To improve user experience and security, we integrate **ENS** for beneficiary registration.
-- **Integration Details**: [📖 SPONSOR_ENS.md](./SPONSOR_ENS.md)
+- **Integration Details**: [📖 ENS.md](./ENS.md)
 
-### 3. Yellow Network (Nitrolite Protocol)
-Lazarus Protocol implements "Gas-Free Heartbeats" using session-based logic inspired by the **Yellow SDK**.
-- **Integration Details**: [📖 SPONSOR_YELLOW.md](./SPONSOR_YELLOW.md)
 
 ---
 
