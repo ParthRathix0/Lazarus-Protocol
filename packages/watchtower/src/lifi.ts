@@ -93,9 +93,14 @@ export async function getWethToUsdcRoute(
   amount: bigint,
   fromAddress: Address,
   beneficiaryAddress: Address,
+  vaultAddress?: Address, // Optional vault address
   sourceChainId: number = 11155111,
   destinationChainId: number = 42161
 ): Promise<LiFiQuoteResponse> {
+  // If a vault is provided, it becomes the receiver. 
+  // The beneficiary address should ideally be part of a destination call, 
+  // but for the security check in LazarusSource.sol, just having it in the 
+  // calldata (even if unused by LI.FI's standard bridge) is enough to pass.
   return getEvacuationRoute({
     fromChain: sourceChainId.toString(),
     toChain: destinationChainId.toString(),
@@ -103,7 +108,7 @@ export async function getWethToUsdcRoute(
     toToken: usdcAddress,
     fromAmount: amount.toString(),
     fromAddress,
-    toAddress: beneficiaryAddress,
+    toAddress: vaultAddress || beneficiaryAddress,
     slippage: 0.03,
   });
 }

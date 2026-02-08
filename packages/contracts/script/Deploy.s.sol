@@ -56,12 +56,14 @@ contract DeployVault is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
+        address usdc = vm.envAddress("USDC_ARBITRUM_SEPOLIA");
         
         console.log("Deployer address:", deployer);
+        console.log("Using USDC at:", usdc);
         
         vm.startBroadcast(deployerPrivateKey);
         
-        LazarusVault vault = new LazarusVault(USDC);
+        LazarusVault vault = new LazarusVault(usdc);
         console.log("LazarusVault deployed at:", address(vault));
         
         vm.stopBroadcast();

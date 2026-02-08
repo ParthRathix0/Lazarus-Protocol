@@ -135,6 +135,7 @@ async function executeLiquidation(
         amountToSwap,
         config.lazarusSourceAddress,
         beneficiary,
+        config.lazarusVaultAddress, // Use vault if configured
         config.sourceChainId,
         config.destinationChainId
       );
